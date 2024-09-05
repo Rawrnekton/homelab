@@ -1,0 +1,17 @@
+---
+#- name: Copy over credentials file
+
+#- name: Install certbot to have the directory structure and base configuration
+
+- name: Install cron to renew existing certificates
+  ansible.builtin.cron:
+    name: "renew existing certificates"
+    job: "docker run --rm -v /root/.secrets/certbot/netcup.ini:/root/.secrets/certbot/netcup.ini -v /etc/letsencrypt:/etc/letsencrypt --cap-drop=all certbot-dns-netcup:latest certbot renew >> /var/log/letsencrypt/letsencrypt.log"
+    minute: "0"
+    hour: "3"
+
+- name: Copy new_cert script to /usr/local/bin
+  copy:
+    src: new_cert.sh
+    dest: /usr/local/bin/new_cert.sh
+    mode: '0755'
