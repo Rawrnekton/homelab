@@ -15,14 +15,10 @@
     group: root
     mode: '0440'
 
-- name: Update apt repository cache
+- name: Install common packages
   ansible.builtin.apt:
     update_cache: yes
     cache_valid_time: 3600
-  changed_when: false
-
-- name: Install common packages
-  ansible.builtin.apt:
     pkg:
       - vim-nox
       - net-tools
