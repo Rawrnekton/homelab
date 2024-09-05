@@ -1,0 +1,15 @@
+---
+- name: Clone the certbot-dns-netcup repository
+  git:
+    repo: https://github.com/coldfix/certbot-dns-netcup.git
+    dest: /opt/certbot-dns-netcup
+    update: yes
+
+- name: Build Docker image for certbot-dns-netcup
+  docker_image:
+    build:
+      path: /opt/certbot-dns-netcup
+    name: certbot-dns-netcup
+    tag: latest
+    state: present
+    source: build

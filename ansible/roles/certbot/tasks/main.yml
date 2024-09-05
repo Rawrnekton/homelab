@@ -1,0 +1,9 @@
+---
+- name: Install Requirements, this is mostly just docker
+  import_tasks: requirements.yml
+
+- name: Install Docker container and setup cronjobs
+  import_tasks: certbot-docker-setup.yml
+
+- name: Install cron to renew existing certificates
+  import_tasks: cron_renew_certs.yml
