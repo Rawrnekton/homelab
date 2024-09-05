@@ -1,7 +1,19 @@
 ---
-#- name: Copy over credentials file
+- name: Copy netcup credentials to the server
+  copy:
+    src: netcup.ini
+    dest: /root/.secrets/certbot/netcup.ini
+    owner: root
+    group: root
+    mode: '0600'
 
-#- name: Install certbot to have the directory structure and base configuration
+# This will never be actually run on the host itself, it just exists
+# so the directory and config structure exists
+- name: Install Certbot on Ubuntu/Debian
+  apt:
+    name: certbot
+    state: present
+    update_cache: yes
 
 - name: Install cron to renew existing certificates
   ansible.builtin.cron:
@@ -13,5 +25,5 @@
 - name: Copy new_cert script to /usr/local/bin
   copy:
     src: new_cert.sh
-    dest: /usr/local/bin/new_cert.sh
+    dest: /usr/local/bin/new_cert
     mode: '0755'
