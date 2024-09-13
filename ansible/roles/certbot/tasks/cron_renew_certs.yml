@@ -43,8 +43,8 @@
       --deploy-hook
       "cat $RENEWED_LINEAGE/privkey.pem $RENEWED_LINEAGE/fullchain.pem 
       > /etc/ssl/private/$(echo $RENEWED_DOMAINS | awk '{print $1}').pem"
-      --post-hook "systemctl restart haproxy"
       >> /var/log/letsencrypt/letsencrypt.log
+      && systemctl restart haproxy 
     minute: "0"
     hour: "3"
 
