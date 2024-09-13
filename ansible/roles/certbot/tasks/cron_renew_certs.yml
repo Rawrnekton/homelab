@@ -13,7 +13,21 @@
   apt:
     name: certbot
     state: present
-    update_cache: yes
+
+- name: >
+    Disable the systemd certbot.timer service that would trigger renews
+    but will be unable to run with this setup anyway 
+    because of missing dependencies
+  ansible.builtin.systemd:
+    name: certbot.timer
+    enabled: false
+    state: stopped
+    
+- name: Make sure the target directory to deploy certificates to exists
+  ansible.builtin.file:
+    path: /etc/ssl/private
+    state: directory
+    mode: '0700'
 
 - name: Install cron to renew existing certificates
   ansible.builtin.cron:
@@ -22,13 +36,21 @@
       docker run --rm
       -v /root/.secrets/certbot/netcup.ini:/root/.secrets/certbot/netcup.ini
       -v /etc/letsencrypt:/etc/letsencrypt
+      -v /etc/ssl/private:/etc/ssl/private
       --cap-drop=all
       certbot-dns-netcup:latest
       certbot renew
+      --deploy-hook
+      "cat $RENEWED_LINEAGE/privkey.pem $RENEWED_LINEAGE/fullchain.pem 
+      > /etc/ssl/private/$(echo $RENEWED_DOMAINS | awk '{print $1}').pem"
+      --post-hook "systemctl restart haproxy"
       >> /var/log/letsencrypt/letsencrypt.log
     minute: "0"
     hour: "3"
 
+# this is for the seperate workflow of obtaining new le certs
+# as this is blocking for 20 minutes this will not be used 
+# during ansible execution
 - name: Copy new_cert script to /usr/local/bin
   copy:
     src: new_cert.sh
