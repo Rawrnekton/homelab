@@ -1,7 +1,13 @@
-[kubernetes]
+[argo]
 argo-1
 argo-2
 argo-3
 
 [gateway]
+odysseus
+
+[homelab]
+argo-1
+argo-2
+argo-3
 odysseus

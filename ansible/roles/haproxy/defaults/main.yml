@@ -1,0 +1,8 @@
+---
+# defaults file for haproxy
+
+services:
+  - name: service_name_1
+  - name: service_name_2
+
+
