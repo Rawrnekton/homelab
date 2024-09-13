@@ -37,12 +37,15 @@
       -v /root/.secrets/certbot/netcup.ini:/root/.secrets/certbot/netcup.ini
       -v /etc/letsencrypt:/etc/letsencrypt
       -v /etc/ssl/private:/etc/ssl/private
+      -v /var/log/letsencrypt:/var/log/letsencrypt
       --cap-drop=all
       certbot-dns-netcup:latest
       certbot renew
       --deploy-hook
-      "cat $RENEWED_LINEAGE/privkey.pem $RENEWED_LINEAGE/fullchain.pem 
-      > /etc/ssl/private/$(echo $RENEWED_DOMAINS | awk '{print $1}').pem"
+      "cat \$RENEWED_LINEAGE/privkey.pem \$RENEWED_LINEAGE/fullchain.pem
+      > /etc/ssl/private/\$(echo \$RENEWED_DOMAINS |
+      awk '{print \$1}' |
+      awk -F . '{print \$1}').pem"
       >> /var/log/letsencrypt/letsencrypt.log
       && systemctl restart haproxy 
     minute: "0"
