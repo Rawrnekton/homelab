@@ -18,7 +18,14 @@
 - name: Install cron to renew existing certificates
   ansible.builtin.cron:
     name: "renew existing certificates"
-    job: "docker run --rm -v /root/.secrets/certbot/netcup.ini:/root/.secrets/certbot/netcup.ini -v /etc/letsencrypt:/etc/letsencrypt --cap-drop=all certbot-dns-netcup:latest certbot renew >> /var/log/letsencrypt/letsencrypt.log"
+    job: >
+      docker run --rm
+      -v /root/.secrets/certbot/netcup.ini:/root/.secrets/certbot/netcup.ini
+      -v /etc/letsencrypt:/etc/letsencrypt
+      --cap-drop=all
+      certbot-dns-netcup:latest
+      certbot renew
+      >> /var/log/letsencrypt/letsencrypt.log
     minute: "0"
     hour: "3"
 
