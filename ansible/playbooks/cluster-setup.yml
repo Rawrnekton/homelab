@@ -1,7 +1,6 @@
 ---
 - name: Install Certbot with DNS validation
-  hosts: gateway
+  hosts: argo
   become: true
   roles:
-    #- certbot
-    - haproxy
+    - cluster-setup
