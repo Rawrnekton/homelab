@@ -14,3 +14,63 @@
     mode: '0644'
   notify: Restart HAProxy
 
+- name: Check if certificate file exists for each service
+  ansible.builtin.stat:
+    path: "/etc/ssl/private/{{ item.name }}.pem"
+  loop: "{{ services }}"
+  register: cert_files
+
+- name: Generate an OpenSSL private key with the default values (4096 bits, RSA)
+  community.crypto.openssl_privatekey:
+    path: "/etc/ssl/private/{{ item.item.name }}.key"
+  when: not item.stat.exists
+  loop: "{{ cert_files.results }}"
+
+- name: Create certificate signing request (CSR) for self-signed certificate
+  community.crypto.openssl_csr:
+    privatekey_path: "/etc/ssl/private/{{ item.item.name }}.key"
+    common_name: "{{ item.item.name }}.cindergla.de"
+    subject_alt_name:
+      - "DNS:{{ item.item.name }}.k8s.internal.cindergla.de"
+    path: "/etc/ssl/private/{{ item.item.name }}.csr"
+  when: not item.stat.exists
+  loop: "{{ cert_files.results }}"
+
+- name: Create self-signed staging certificate if no cert file is found
+  community.crypto.x509_certificate:
+    path: "/etc/ssl/private/{{ item.item.name }}.crt"
+    privatekey_path: "/etc/ssl/private/{{ item.item.name }}.key"
+    csr_path: "/etc/ssl/private/{{ item.item.name }}.csr"
+    provider: selfsigned
+  when: not item.stat.exists
+  loop: "{{ cert_files.results }}"
+
+- name: Create the pem
+  ansible.builtin.shell: >
+    cat
+    /etc/ssl/private/{{ item.item.name }}.key
+    /etc/ssl/private/{{ item.item.name }}.crt
+    > /etc/ssl/private/{{ item.item.name }}.pem
+  args:
+    executable: /bin/bash
+  when: not item.stat.exists
+  loop: "{{ cert_files.results }}"
+  notify: Restart HAProxy
+
+# Cleanup
+- name: Find all *.crt, *.csr and *.key files in the directory
+  ansible.builtin.find:
+    paths: /etc/ssl/private
+    patterns:
+      - "*.crt"
+      - "*.key"
+      - "*.csr"
+    recurse: no
+  register: files_to_delete
+
+- name: Delete all *.crt, *.csr and *.key files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ files_to_delete.files }}"
+
