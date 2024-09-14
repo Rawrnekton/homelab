@@ -8,10 +8,8 @@ global
     group haproxy
     daemon
 
-    # Maximale Verbindungen, die HAProxy verarbeiten kann
     maxconn 4096
 
-    # SSL/TLS Konfig
     ssl-default-bind-ciphers ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256
     ssl-default-bind-options no-sslv3 no-tls-tickets
 
@@ -35,18 +33,13 @@ frontend http-in
     bind *:80
     http-request redirect scheme https if !{ ssl_fc }
 
-{% for service in services %}
-frontend https-{{ service.name }}-in
-    bind *:443 ssl crt /etc/ssl/private/{{ service.name }}.pem
+frontend https-in
+    bind *:443 ssl crt /etc/ssl/private/
     mode http
-    acl host_backend hdr(host) -i {{ service.name }}.cindergla.de
-    acl host_backend hdr(host) -i {{ service.name }}.k8s.internal.cindergla.de
-    use_backend backend_hosts if host_backend
+    use_backend backend_hosts
 
-{% endfor %}
 backend backend_hosts
     mode http
-    tcp-request inspect-delay 5s
 {% for server in groups['argo'] %}
     server {{ server }} {{ hostvars[server]['ansible_default_ipv4']['address'] }}:443 ssl verify none
 {% endfor %}
