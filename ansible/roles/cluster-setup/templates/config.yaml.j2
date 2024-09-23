@@ -1,0 +1,8 @@
+write-kubeconfig-mode: "0644"
+{% if inventory_hostname != groups['argo'][0] %}
+server: "https://{{ hostvars[groups['argo'][0]]['ansible_default_ipv4']['address'] }}:6443"
+{% else %}
+cluster-init: true
+{% endif %}
+token: {{ cluster_setup_k3s_token }}
+

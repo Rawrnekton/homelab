@@ -1,0 +1,87 @@
+---
+- name: "Ensure 'cluster_setup_k3s_token' is defined"
+  assert:
+    that: "cluster_setup_k3s_token is defined"
+    fail_msg: "The variable 'cluster_setup_k3s_token' must be defined. Please set it in your playbook or inventory."
+
+- name: Make sure K3s dir exists
+  ansible.builtin.file:
+    path: /etc/rancher/k3s/
+    state: directory
+    mode: "0755"
+
+- name: Copy over RKE2 config.yml
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0600"
+
+- name: Discover if RKE2 has already been installed
+  ansible.builtin.stat:
+    path: /var/lib/rancher/k3s/server/node-token
+  register: node_token
+
+- name: Download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: "0755"
+  when: not node_token.stat.exists
+  changed_when: true
+
+- name: Install k3s
+  ansible.builtin.command: /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ cluster_setup_k3s_channel }}"
+    INSTALL_K3S_VERSION: "{{ cluster_setup_k3s_version }}"
+    INSTALL_K3S_SKIP_START: "true"
+    K3S_CLUSTER_INIT: "true"
+    INSTALL_K3S_EXEC: "server"
+  when: 
+    - not node_token.stat.exists
+    - inventory_hostname == groups['argo'][0]
+  changed_when: true
+
+- name: Install k3s
+  ansible.builtin.command: /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ cluster_setup_k3s_channel }}"
+    INSTALL_K3S_VERSION: "{{ cluster_setup_k3s_version }}"
+    INSTALL_K3S_SKIP_START: "true"
+    INSTALL_K3S_EXEC: "server"
+  when: 
+    - not node_token.stat.exists
+    - inventory_hostname != groups['argo'][0]
+  changed_when: true
+
+- name: Enable and start k3s server service on first node
+  ansible.builtin.systemd:
+    name: k3s
+    enabled: true
+    state: started
+  delay: 60
+  when: inventory_hostname == groups['argo'][0]
+
+- name: Enable and start k3s server service on every other node
+  ansible.builtin.systemd:
+    name: k3s
+    enabled: true
+    state: started
+  retries: 3
+  delay: 60
+  when: inventory_hostname != groups['argo'][0]
+
+# This has to get refractored
+- name: Wait until all control nodes are Ready
+  ansible.builtin.shell: >
+    set -o pipefail && kubectl get nodes |
+    grep [^t]Ready.*control |
+    wc -l
+  args:
+    executable: /bin/bash
+  register: ready_nodes_count
+  until: ready_nodes_count.stdout | int == groups['argo'] | length
+  retries: 10
+  delay: 60
+  changed_when: false
+
