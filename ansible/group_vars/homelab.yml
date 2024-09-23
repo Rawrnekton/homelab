@@ -2,3 +2,10 @@ services:
     - name: meali
     - name: rancher
     - name: homepage
+
+# cluster-setup
+cluster_setup_k3s_token: "REDACTED"
+
+cluster_setup_k3s_channel: "stable"
+cluster_setup_k3s_version: "v1.30.4+k3s1"
+

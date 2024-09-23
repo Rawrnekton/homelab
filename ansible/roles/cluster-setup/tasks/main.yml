@@ -1,2 +1,7 @@
 ---
 # tasks file for cluster-setup
+- name: Install RKE2 on control plane nodes
+  ansible.builtin.include_tasks: control-plane.yml
+  when: inventory_hostname in groups['argo']
+
+
