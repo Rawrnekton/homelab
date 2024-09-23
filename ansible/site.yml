@@ -1,3 +1,4 @@
 ---
 - import_playbook: playbooks/base.yml
 - import_playbook: playbooks/gateway.yml
+- import_playbook: playbooks/cluster-setup.yml
