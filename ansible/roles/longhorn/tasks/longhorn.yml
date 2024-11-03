@@ -1,0 +1,65 @@
+---
+# tasks file for longhorn
+- name: Add longhorn repo
+  ansible.builtin.shell: >
+    helm repo add longhorn https://charts.longhorn.io
+  args:
+    executable: /bin/bash
+  register: longhorn_repo_output
+  changed_when: "'already exists' not in longhorn_repo_output.stdout"
+
+- name: Helm repo update
+  ansible.builtin.shell: >
+    helm repo update
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Create longhorn_values.yaml file with storage scheduling disabled on all nodes
+  copy:
+    dest: /root/longhorn_values.yml
+    content: |
+      defaultSettings:
+        defaultReplicaCount: 3
+#         createDefaultDiskLabeledNodes: true
+    
+- name: Install Longhorn via Helm
+  ansible.builtin.shell: >
+    helm install longhorn longhorn/longhorn 
+    --namespace longhorn-system
+    --create-namespace
+    --version 1.7.2
+    -f /root/longhorn_values.yml
+  args:
+    executable: /bin/bash
+  register: longhorn_install_output
+  changed_when: "'Error: INSTALLATION FAILED: cannot re-use a name that is still in use' not in longhorn_install_output.stderr"
+  failed_when: 
+    - "'Error: INSTALLATION FAILED: cannot re-use a name that is still in use' not in longhorn_install_output.stderr"
+    - "'Longhorn is now installed on the cluster' not in longhorn_install_output.stdout"
+
+# - name: Add node label to enable Longhorn default disk creation on all worker nodes
+#   command: "/var/lib/rancher/rke2/bin/kubectl label node {{ item }} node.longhorn.io/create-default-disk=true --overwrite"
+#   with_items: "{{ groups['worker'] }}"
+#   register: labeling_output
+#   changed_when: "'not labeled' not in labeling_output.stdout"
+
+# a storage class with three replicas exists by default
+- name: Creates directory for manifest
+  ansible.builtin.file:
+    path: /root/k8s-manifests/
+    state: directory
+
+- name: Create storage class with only one replica
+  ansible.builtin.copy:
+    src: longhorn-r1.yml
+    dest: /root/k8s-manifests/longhorn-r1.yml
+
+- name: Apply the storage class yml
+  ansible.builtin.shell: >
+    kubectl apply 
+    -f /root/k8s-manifests/longhorn-r1.yml
+  args:
+    executable: /bin/bash
+  register: apply_out
+  changed_when: "'unchanged' not in apply_out.stdout"
