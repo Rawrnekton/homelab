@@ -1,7 +1,9 @@
 ---
 # tasks file for cluster-setup
-- name: Install RKE2 on control plane nodes
+- name: Install K3s on control plane nodes
   ansible.builtin.include_tasks: control-plane.yml
   when: inventory_hostname in groups['argo']
 
-
+- name: Install rancher and dependencies on the first control plane
+  ansible.builtin.include_tasks: rancher.yml
+  when: inventory_hostname in groups['argo'][0]

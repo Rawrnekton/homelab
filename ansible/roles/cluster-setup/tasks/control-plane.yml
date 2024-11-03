@@ -1,4 +1,8 @@
 ---
+- name: "Debug cluster_setup_k3s_token"
+  debug:
+    var: cluster_setup_k3s_token
+
 - name: "Ensure 'cluster_setup_k3s_token' is defined"
   assert:
     that: "cluster_setup_k3s_token is defined"
@@ -68,3 +72,16 @@
   retries: 10
   delay: 60
   changed_when: false
+
+### kubeconfig 
+# the kubeconfig on k3s seems to be fixed in the config somehow
+# as helm does not know about this, the file needs 
+# to be symlinked regardless
+- name: Copy kubeconfig to a place where helm expects it
+  ansible.builtin.file:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /root/.kube/config
+    owner: root
+    group: root
+    mode: '0600'
+    state: link

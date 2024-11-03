@@ -1,0 +1,17 @@
+---
+### general
+services:
+    - name: meali
+    - name: rancher
+    - name: homepage
+
+### cluster-setup
+cluster_setup_k3s_token: "{{ vault_cluster_setup_k3s_token }}"
+cluster_setup_k3s_channel: "stable"
+cluster_setup_k3s_version: "v1.30.4+k3s1"
+
+cluster_setup_rancher_hostname: "rancher.k8s.internal.cindergla.de"
+cluster_setup_rancher_replica_count: 1
+cluster_setup_rancher_bootstrap_password: >-
+  "{{ vault_cluster_setup_rancher_bootstrap_password }}"
+cluster_setup_rancher_version: v2.9.2

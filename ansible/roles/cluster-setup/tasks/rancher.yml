@@ -1,0 +1,77 @@
+---
+### Helm
+- name: Install Helm on the node
+  ansible.builtin.shell: >
+    set -o pipefail && 
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 
+    | bash
+  args:
+    executable: /bin/bash
+  register: helm_install_output
+  changed_when: "'is already latest' not in helm_install_output.stdout"
+
+### Cert-Manager
+- name: Add jetstack repo
+  ansible.builtin.shell: >
+    helm repo add jetstack https://charts.jetstack.io
+  args:
+    executable: /bin/bash
+  register: jetstack_repo_output
+  changed_when: "'skipping' not in jetstack_repo_output.stdout"
+
+- name: Helm repo update
+  ansible.builtin.shell: >
+    helm repo update
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: "'skipping' not in jetstack_repo_output.stdout"
+
+- name: Install cert-manager via Helm
+  ansible.builtin.shell: >
+    helm install cert-manager jetstack/cert-manager 
+    --namespace cert-manager
+    --version v1.13.3 --set installCRDs=true --create-namespace
+    --set startupapicheck.timeout=5m
+  args:
+    executable: /bin/bash
+  register: cert_manager_install_output
+  changed_when: "'cannot re-use a name that is still in use' not in cert_manager_install_output.stderr"
+  failed_when: "'Kubernetes cluster unreachable' in cert_manager_install_output.stderr"
+
+### Rancher
+- name: Add rancher repo
+  ansible.builtin.shell: >
+    helm repo add rancher-stable 
+    https://releases.rancher.com/server-charts/stable
+  args:
+    executable: /bin/bash
+  register: rancher_repo_output
+  changed_when: "'skipping' not in rancher_repo_output.stdout"
+
+- name: Helm repo update
+  ansible.builtin.shell: >
+    helm repo update
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: "'skipping' not in rancher_repo_output.stdout"
+
+- name: Install rancher via Helm
+  ansible.builtin.shell: >
+    helm install rancher rancher-stable/rancher
+    --namespace cattle-system
+    --set hostname={{ cluster_setup_rancher_hostname }}
+    --set replicas={{ cluster_setup_rancher_replica_count }}
+    --set bootstrapPassword={{ cluster_setup_rancher_bootstrap_password }}
+    --version={{ cluster_setup_rancher_version }}
+    --create-namespace
+  args:
+    executable: /bin/bash
+  register: rancher_install_output
+  changed_when: "'cannot re-use a name that is still in use' not in rancher_install_output.stderr"
+  failed_when: "'INSTALLATION FAILED' in rancher_install_output.stderr and 'cannot re-use a name that is still in use' not in rancher_install_output.stderr"
+
+- name: Display Rancher Install Output
+  ansible.builtin.debug:
+    var: rancher_install_output

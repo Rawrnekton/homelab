@@ -1,7 +1,0 @@
----
-- name: Install Certbot with DNS validation
-  hosts: gateway
-  become: true
-  roles:
-    - certbot
-    - haproxy
