@@ -1,0 +1,28 @@
+---
+# tasks file for lvm-setup
+
+- name: Extend rootlv
+  community.general.lvol:
+    vg: ubuntu-vg
+    lv: ubuntu-lv
+    size: 20g
+    resizefs: true
+
+- name: Extend longhorn-lv
+  community.general.lvol:
+    vg: ubuntu-vg
+    lv: longhorn-lv
+    size: 100g
+    resizefs: true
+
+- name: Create ext4 fs on the longhorn lvs
+  community.general.filesystem:
+    fstype: ext4
+    dev: /dev/ubuntu-vg/longhorn-lv
+
+- name: Mount longhorn lvs
+  mount:
+    path: /var/lib/longhorn
+    src: /dev/ubuntu-vg/longhorn-lv
+    state: mounted
+    fstype: ext4
