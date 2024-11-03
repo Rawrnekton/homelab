@@ -3,3 +3,8 @@
 
 cluster_setup_k3s_channel: "stable"
 cluster_setup_k3s_version: "v1.30.4+k3s1"
+
+cluster_setup_ranche_hostname: "rancher.{{ hostvars[groups['control'][0]]['ansible_default_ipv4']['address'] }}.sslip.io"
+rancher_replica_count: 1
+rancher_bootstrap_password: "{{ vault_rancher_bootstrap_password }}"
+rancher_version: 2.9.2

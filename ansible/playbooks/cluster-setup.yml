@@ -1,6 +1,0 @@
----
-- name: Install Certbot with DNS validation
-  hosts: argo
-  become: true
-  roles:
-    - cluster-setup

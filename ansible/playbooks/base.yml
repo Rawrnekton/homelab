@@ -1,6 +1,0 @@
----
-- name: Run everything
-  hosts: all
-  become: true
-  roles:
-    - common
