@@ -1,0 +1,5 @@
+---
+- name: Install Longhorn with helm through the first control node
+  ansible.builtin.include_tasks: longhorn.yml
+  when: inventory_hostname == groups['argo'][0]
+
