@@ -1,0 +1,10 @@
+---
+# tasks file for database
+- name: Install cnpg operator and database
+  ansible.builtin.include_tasks: setup.yml
+  when: inventory_hostname == groups['argo'][0]
+
+#- name: Setup all needed users and databases
+#  ansible.builtin.include_tasks: provisioning.yml
+#  when: inventory_hostname == groups['argo'][0]
+
