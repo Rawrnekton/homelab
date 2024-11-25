@@ -5,7 +5,7 @@
   community.general.lvol:
     vg: ubuntu-vg
     lv: ubuntu-lv
-    size: 20g
+    size: "{{ lvm_setup_root_size }}"
     resizefs: true
 
 - name: Extend longhorn-lv
