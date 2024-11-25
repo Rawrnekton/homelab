@@ -1,0 +1,6 @@
+---
+# defaults file for database
+database_instances: 3
+database_storage_size: 50Gi
+# define this if you need to
+#database_storageclass: your-storage-class
