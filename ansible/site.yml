@@ -19,3 +19,4 @@
     - lvm-setup
     - cluster-setup
     - longhorn
+    - database
