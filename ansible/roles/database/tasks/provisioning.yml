@@ -1,0 +1,29 @@
+---
+- name: Create users
+  shell: >
+    kubectl exec -it svc/database-rw -n database -- 
+    psql -c "CREATE USER {{ item.name }} WITH PASSWORD '{{ item.password }}';"
+  args:
+    executable: /bin/bash
+  loop: "{{ database_users }}"
+  no_log: true # this is just here so the passwords don't appear on stdout
+  when: item.name is defined and item.password is defined
+  register: create_user_output
+  changed_when: "'already exists' not in create_user_output.stdout"
+  failed_when:
+    - create_user_output.rc != 0
+    - "'already exists' not in create_user_output.stdout" 
+
+- name: Führe SQL-Befehl zur Erstellung von Datenbanken mit Benutzer als Owner aus
+  shell: >
+    kubectl exec -it svc/database-rw -n database -- 
+    psql -c "CREATE DATABASE {{ item.name }} OWNER {{ item.user }};"
+  args:
+    executable: /bin/bash
+  loop: "{{ database_databases }}"
+  when: item.name is defined and item.user is defined
+  register: create_db_output
+  changed_when: "'already exists' not in create_db_output.stdout"
+  failed_when:
+    - create_db_output.rc != 0
+    - "'already exists' not in create_db_output.stdout" 
