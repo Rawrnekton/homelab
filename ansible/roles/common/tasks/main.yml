@@ -24,4 +24,5 @@
       - net-tools
       - ripgrep
       - fd-find
+      - tmux
     state: latest
