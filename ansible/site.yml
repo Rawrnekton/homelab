@@ -20,3 +20,4 @@
     - cluster-setup
     - longhorn
     - database
+    - sealed-secrets
