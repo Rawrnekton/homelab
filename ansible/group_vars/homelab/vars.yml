@@ -1,7 +1,7 @@
 ---
 ### general
 services:
-    - name: meali
+    - name: mealie
     - name: rancher
     - name: homepage
 
