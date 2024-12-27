@@ -1,16 +1,22 @@
 ---
 - name: Install Base Configuration
-  hosts: all
+  hosts: homelab
   become: true
   roles:
     - common
 
-- name: Install Certbot with DNS validation
+- name: Setup gateway for proxying and tls termination
   hosts: gateway
   become: true
   roles:
     - certbot
     - haproxy
+
+- name: Setup wireguard tunnel between gateway and vps
+  hosts: gateway:vps
+  become: true
+  roles:
+    - wireguard
 
 - name: Provision Cluster
   hosts: argo

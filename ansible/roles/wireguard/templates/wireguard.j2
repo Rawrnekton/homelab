@@ -1,0 +1,21 @@
+[Interface]
+PrivateKey = {{ wireguard_private_key.stdout }}
+Address = {% if ansible_hostname in groups['vps'] %}10.0.0.1/24
+{% else %}10.0.0.2/24
+{% endif %}
+{% if ansible_hostname in groups['vps'] %}
+ListenPort = 51820
+{% endif %}
+
+[Peer]
+{% if ansible_hostname in groups['vps'] %}
+PublicKey = {{ hostvars[groups['gateway'][0]].wireguard_public_key.stdout }}
+AllowedIPs = 10.0.0.2/32
+{% else %}
+PublicKey = {{ hostvars[groups['vps'][0]].wireguard_public_key.stdout }}
+Endpoint = {{ hostvars[groups['vps'][0]].ansible_default_ipv4.address }}:51820
+AllowedIPs = 10.0.0.0/24
+{% endif %}
+{% if ansible_hostname in groups['gateway'] %}
+PersistentKeepalive = 25
+{% endif %}
