@@ -1,0 +1,51 @@
+---
+# tasks file for wireguard
+- name: Install wireguard
+  apt:
+    name: wireguard
+    state: present
+    update_cache: true
+
+#TODO: change changed when
+- name: Generate wireguard priv key if not exists
+  command: wg genkey
+  register: generated_private_key
+  args:
+    creates: "/etc/wireguard/private.key"
+  changed_when: false
+
+#TODO: change when this actually runs depending on the output of the previous command
+- name: Write private key to file
+  copy:
+    content: "{{ generated_private_key.stdout }}"
+    dest: "/etc/wireguard/private.key"
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+
+#TODO: change when this actually runs depending on the output of the previous command
+- name: Generate WireGuard public key from private key
+  shell: "cat /etc/wireguard/private.key | wg pubkey"
+  register: wireguard_public_key
+  changed_when: false
+
+#- debug: 
+#    var: hostvars[groups['vps'][0]].wireguard_public_key.stdout
+#    #var: hostvars['naglfar'].wireguard_public_key.stdout
+
+- name: register priv key value
+  shell: "cat /etc/wireguard/private.key"
+  register: wireguard_private_key
+  changed_when: false
+
+- name: Create wireguard configuration
+  template:
+    src: wireguard.j2
+    dest: /etc/wireguard/wg0.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+
+
