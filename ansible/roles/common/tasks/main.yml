@@ -25,4 +25,4 @@
       - ripgrep
       - fd-find
       - tmux
-    state: latest
+    state: present
