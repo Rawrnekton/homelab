@@ -7,3 +7,8 @@ resources:
 - ../../base
 - mealie_database_sealed.yaml
 - mealie_smtp_sealed.yaml
+
+images:
+  - name: mealie
+    newName: ghcr.io/mealie-recipes/mealie
+    newTag: v2.8.0
