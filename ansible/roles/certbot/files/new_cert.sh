@@ -29,4 +29,4 @@ cat /etc/letsencrypt/live/$service_name.cindergla.de/privkey.pem \
   /etc/letsencrypt/live/$service_name.cindergla.de/fullchain.pem \
   > /etc/ssl/private/$service_name.pem
 
-systemctl haproxy restart
+systemctl restart haproxy
