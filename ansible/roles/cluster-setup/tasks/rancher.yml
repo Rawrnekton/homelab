@@ -10,6 +10,12 @@
   register: helm_install_output
   changed_when: "'is already latest' not in helm_install_output.stdout"
 
+- name: rancher | HELM | install helm diff plugin
+  ansible.builtin.shell: >
+    helm plugin install https://github.com/databus23/helm-diff
+  args:
+    creates: ~/.local/share/helm/plugins/helm-diff
+
 ### Cert-Manager
 - name: Add jetstack repo
   ansible.builtin.shell: >
