@@ -3,3 +3,13 @@
   ansible.builtin.include_tasks: longhorn.yml
   when: inventory_hostname == groups['argo'][0]
 
+- name: longhorn | SYSTEMD | prevent multipath from automounting voloumes on host
+  ansible.builtin.blockinfile:
+    path: /etc/multipath.conf
+    append_newline: true
+    prepend_newline: true
+    block: |
+      blacklist {
+          devnode "^sd[a-z0-9]+"
+      }
+  notify: longhorn | restart multipathd
