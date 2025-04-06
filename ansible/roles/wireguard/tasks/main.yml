@@ -46,6 +46,6 @@
     owner: root
     group: root
     mode: "0600"
-
-
-
+    backup: true
+  # i have not found out why this always comes back changed in check_mode
+  when: not ansible_check_mode
