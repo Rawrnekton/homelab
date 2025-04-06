@@ -69,6 +69,7 @@
     executable: /bin/bash
   register: ready_nodes_count
   until: ready_nodes_count.stdout | int == groups['argo'] | length
+  check_mode: false
   retries: 10
   delay: 60
   changed_when: false
