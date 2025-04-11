@@ -6,8 +6,7 @@ labels:
       environment: homelab
 resources:
   - ../../base
-  - mealie_database_sealed.yaml
-  - mealie_smtp_sealed.yaml
+  - sealed-secrets/
 
 images:
   - name: mealie
