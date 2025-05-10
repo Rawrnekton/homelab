@@ -1,12 +1,12 @@
 ---
 # tasks file for haproxy
 - name: Install HAProxy
-  apt:
+  ansible.builtin.apt:
     name: haproxy
     state: present
 
 - name: Copy HAProxy configuration file
-  template:
+  ansible.builtin.template:
     src: haproxy.cfg.j2
     dest: /etc/haproxy/haproxy.cfg
     owner: root
@@ -54,6 +54,7 @@
   args:
     executable: /bin/bash
   when: not item.stat.exists
+  changed_when: true
   loop: "{{ cert_files.results }}"
   notify: Restart HAProxy
 
@@ -65,7 +66,7 @@
       - "*.crt"
       - "*.key"
       - "*.csr"
-    recurse: no
+    recurse: false
   register: files_to_delete
 
 - name: Delete all *.crt, *.csr and *.key files
@@ -73,4 +74,3 @@
     path: "{{ item.path }}"
     state: absent
   loop: "{{ files_to_delete.files }}"
-

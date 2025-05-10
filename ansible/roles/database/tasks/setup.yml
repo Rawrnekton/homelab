@@ -17,19 +17,20 @@
     executable: /bin/bash
   register: cnpg_operator_install_output
   changed_when: "'Error: INSTALLATION FAILED: cannot re-use a name that is still in use' not in cnpg_operator_install_output.stderr"
-  failed_when: 
+  failed_when:
     - "'Error: INSTALLATION FAILED: cannot re-use a name that is still in use' not in cnpg_operator_install_output.stderr"
     - "'Release \"cnpg\" does not exist. Installing it now' not in cnpg_operator_install_output.stdout"
     - "'STATUS: deployed' not in cnpg_operator_install_output.stdout"
 
-- name: copy over database manifests
+- name: Copy over database manifests
   ansible.builtin.template:
     src: database.yml.j2
     dest: /root/database.yml
+    mode: "0644"
 
 - name: Apply the database yml
   ansible.builtin.shell: >
-    kubectl apply 
+    kubectl apply
     -f /root/database.yml
   args:
     executable: /bin/bash
@@ -37,4 +38,3 @@
   changed_when: "'unchanged' not in apply_out.stdout"
   retries: 1
   delay: 10
-
