@@ -1,7 +1,0 @@
-# dear reader:
-# I am aware that the implication of this is dumb as hell, 
-# but this will be fixed once I get around setting up
-# this host again
-# rest assured that password auth is completely disabled 
-# on this host
-ansible_user: root
