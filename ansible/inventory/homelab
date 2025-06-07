@@ -6,11 +6,15 @@ argo-3
 [gateway]
 odysseus
 
+[dns]
+pihole
+
 [homelab]
 argo-1
 argo-2
 argo-3
 odysseus
+pihole
 
 [vps]
 naglfar
