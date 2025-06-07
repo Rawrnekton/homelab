@@ -18,6 +18,12 @@
   roles:
     - wireguard
 
+- name: Setup dns records for services
+  hosts: dns
+  become: true
+  roles:
+    - dns
+
 - name: Provision Cluster
   hosts: argo
   become: true
