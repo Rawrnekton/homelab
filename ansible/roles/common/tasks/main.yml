@@ -1,16 +1,27 @@
 ---
 # tasks file for common
+- name: Gather ssh_user
+  ansible.builtin.command: whoami
+  become: false
+  register: ssh_user_raw
+  changed_when: false
+  check_mode: false # else this gets skipped with -C/--check
+
+- name: Flatten variable to be more usable
+  ansible.builtin.set_fact:
+    ssh_user: "{{ ssh_user_raw.stdout }}"
+
 - name: Create sudoers file for user, this enables passwordless sudo
   ansible.builtin.copy:
-    dest: "/etc/sudoers.d/{{ ansible_user }}"
-    content: "{{ ansible_user }} ALL = (root) NOPASSWD:ALL\n"
+    dest: "/etc/sudoers.d/{{ ssh_user }}"
+    content: "{{ ssh_user }} ALL = (root) NOPASSWD:ALL\n"
     owner: root
     group: root
     mode: '0440'
 
 - name: Set correct permissions on sudoers file
   ansible.builtin.file:
-    path: "/etc/sudoers.d/{{ ansible_user }}"
+    path: "/etc/sudoers.d/{{ ssh_user }}"
     owner: root
     group: root
     mode: '0440'
