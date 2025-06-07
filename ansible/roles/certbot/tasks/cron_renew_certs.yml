@@ -1,6 +1,6 @@
 ---
 - name: Copy netcup credentials to the server
-  copy:
+  ansible.builtin.copy:
     src: netcup.ini
     dest: /root/.secrets/certbot/netcup.ini
     owner: root
@@ -10,22 +10,21 @@
 # This will never be actually run on the host itself, it just exists
 # so the directory and config structure exists
 - name: Install Certbot on Ubuntu/Debian
-  apt:
+  ansible.builtin.apt:
     name: certbot
     state: present
 
 - name: >
     Disable the systemd certbot.timer service that would trigger renews
-    but will be unable to run with this setup anyway 
-    because of missing dependencies
+    but will be unable to run with this setup because of missing dependencies
   ansible.builtin.systemd:
     name: certbot.timer
     enabled: false
     state: stopped
-    
+
 - name: Make sure the target directory to deploy certificates to exists
   ansible.builtin.file:
-    path: /etc/ssl/private
+    path: /etc/haproxy/ssl
     state: directory
     mode: '0700'
 
@@ -36,26 +35,17 @@
       docker run --rm
       -v /root/.secrets/certbot/netcup.ini:/root/.secrets/certbot/netcup.ini
       -v /etc/letsencrypt:/etc/letsencrypt
-      -v /etc/ssl/private:/etc/ssl/private
+      -v /etc/haproxy/ssl:/etc/haproxy/ssl
       -v /var/log/letsencrypt:/var/log/letsencrypt
       --cap-drop=all
       certbot-dns-netcup:latest
       certbot renew
       --deploy-hook
       "cat \$RENEWED_LINEAGE/privkey.pem \$RENEWED_LINEAGE/fullchain.pem
-      > /etc/ssl/private/\$(echo \$RENEWED_DOMAINS |
+      > /etc/haproxy/ssl/\$(echo \$RENEWED_DOMAINS |
       awk '{print \$1}' |
       awk -F . '{print \$1}').pem"
       >> /var/log/letsencrypt/letsencrypt.log
-      && systemctl restart haproxy 
+      && systemctl restart haproxy
     minute: "0"
     hour: "3"
-
-# this is for the seperate workflow of obtaining new le certs
-# as this is blocking for 20 minutes this will not be used 
-# during ansible execution
-- name: Copy new_cert script to /usr/local/bin
-  copy:
-    src: new_cert.sh
-    dest: /usr/local/bin/new_cert
-    mode: '0755'

@@ -34,7 +34,7 @@ frontend http-in
     http-request redirect scheme https if !{ ssl_fc }
 
 frontend https-in
-    bind *:443 ssl crt /etc/ssl/private/
+    bind *:443 ssl crt /etc/haproxy/ssl/
     mode http
     use_backend backend_hosts
 
