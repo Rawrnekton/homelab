@@ -9,8 +9,8 @@
   hosts: gateway
   become: true
   roles:
-    - certbot
     - haproxy
+    - certbot
 
 - name: Setup wireguard tunnel between gateway and vps
   hosts: gateway:vps
