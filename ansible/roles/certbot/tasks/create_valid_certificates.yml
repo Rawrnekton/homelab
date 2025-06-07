@@ -1,0 +1,37 @@
+---
+- name: Copy new_cert script to /usr/local/bin
+  ansible.builtin.copy:
+    src: new_cert.sh
+    dest: /usr/local/bin/new_cert
+    mode: '0755'
+
+- name: Find every PEM in /etc/haproxy/ssl/
+  ansible.builtin.find:
+    paths: /etc/haproxy/ssl/
+    patterns: "*.pem"
+    file_type: file
+  register: cert_files
+
+- name: Read X.509 metadata for each cert
+  community.crypto.x509_certificate_info:
+    path: "{{ item.path }}"
+  loop: "{{ cert_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: cert_meta
+
+- name: Build a list of the self-signed certificates
+  ansible.builtin.set_fact:
+    selfsigned_certs: "{{ (selfsigned_certs | default([])) + [item.invocation.module_args.path] }}"
+  loop: "{{ cert_meta.results }}"
+  loop_control:
+    label: "{{ item.invocation.module_args.path | basename }}"
+  when: item.issuer == item.subject
+
+- name: Start async jobs for letsencrypt certificates
+  ansible.builtin.command: new_cert {{ item | basename | regex_replace('\.pem$', '') }}
+  async: 1800
+  poll: 0
+  loop: "{{ selfsigned_certs | default([]) }}"
+  register: async_jobs
+  changed_when: true
