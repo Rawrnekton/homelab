@@ -1,0 +1,13 @@
+
+---
+# defaults file for ansible/roles/dns
+
+dns_domain_suffix: example.com
+
+dns_services:
+  - name: service_1
+    dns_target: 1.2.3.4
+  - name: service_2
+    dns_target: 5.6.7.8
+  - name: service_3
+    dns_target: 9.0.1.2

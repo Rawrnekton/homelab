@@ -1,0 +1,15 @@
+---
+# handlers file for ansible/roles/dns
+- name: DNS | Restart pihole-FTL
+  ansible.builtin.service:
+    name: pihole-FTL
+    state: restarted
+  changed_when: true
+
+- name: DNS | Wait until DNS is back up again
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 53
+    state: started
+    timeout: 30
+  changed_when: false

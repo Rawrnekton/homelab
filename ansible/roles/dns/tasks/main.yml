@@ -1,0 +1,12 @@
+---
+# tasks file for ansible/roles/dns
+- name: Add records to /etc/pihole/custom.list
+  ansible.builtin.blockinfile:
+    path: /etc/pihole/custom.list
+    block: |
+      {% for service in dns_services %}
+      {{ service.dns_target }} {{ service.name }}.{{ dns_domain_suffix }}
+      {% endfor %}
+  notify:
+    - DNS | Restart pihole-FTL
+    - DNS | Wait until DNS is back up again

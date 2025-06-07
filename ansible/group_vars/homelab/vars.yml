@@ -1,9 +1,19 @@
 ---
 ### general
+
+# TODO: change this to always point to first gateway
+internal_ip_gateway: 192.168.2.170
+
 services:
     - name: mealie
+      dns_target: "{{ internal_ip_gateway }}"
     - name: rancher
+      dns_target: "{{ internal_ip_gateway }}"
     - name: homepage
+      dns_target: "{{ internal_ip_gateway }}"
+
+dns_services: "{{ services }}"
+dns_domain_suffix: "cindergla.de"
 
 ### cluster-setup
 cluster_setup_k3s_token: "{{ vault_cluster_setup_k3s_token }}"
