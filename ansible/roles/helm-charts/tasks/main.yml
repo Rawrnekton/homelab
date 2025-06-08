@@ -1,0 +1,6 @@
+---
+# tasks file for roles/helm-charts
+- name: Install Sealed Secrets
+  ansible.builtin.include_tasks: install_chart.yml
+  when: inventory_hostname == groups['argo'][0]
+  loop: "{{ helm_charts }}"
