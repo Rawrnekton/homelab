@@ -12,6 +12,10 @@ services:
       dns_target: "{{ internal_ip_gateway }}"
     - name: homepage
       dns_target: "{{ internal_ip_gateway }}"
+    - name: argocd
+      dns_target: "{{ internal_ip_gateway }}"
+    - name: authentik
+      dns_target: "{{ internal_ip_gateway }}"
 
 dns_services: "{{ services }}"
 dns_domain_suffix: "cindergla.de"
@@ -29,3 +33,18 @@ cluster_setup_rancher_replica_count: 1
 cluster_setup_rancher_bootstrap_password: >-
   "{{ vault_cluster_setup_rancher_bootstrap_password }}"
 cluster_setup_rancher_version: v2.9.2
+
+### helm-charts
+
+helm_charts:
+  - name: "cnpg"
+    repo_url: "https://cloudnative-pg.github.io/charts"
+    release_name: "cloudnative-pg"
+    release_namespace: "cnpg-system"
+  - name: "sealed-secrets"
+    repo_url: "https://bitnami-labs.github.io/sealed-secrets"
+    release_name: "sealed-secrets"
+    release_namespace: "kube-system"
+    release_values:
+      fullnameOverride: "sealed-secrets-controller"
+  # - name: longhorn has its own role

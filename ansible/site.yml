@@ -31,5 +31,4 @@
     - lvm-setup
     - cluster-setup
     - longhorn
-    - database
-    - sealed-secrets
+    - helm-charts

@@ -1,0 +1,12 @@
+---
+- name: Add Helm Repo
+  kubernetes.core.helm_repository:
+    name: "{{ item.name }}"
+    repo_url: "{{ item.repo_url }}"
+
+- name: Install Helm Chart
+  kubernetes.core.helm:
+    name: "{{ item.name }}"
+    chart_ref: "{{ item.name }}/{{ item.release_name }}"
+    release_namespace: "{{ item.release_namespace }}"
+    values: "{{ item.release_values | default({}, true) }}"

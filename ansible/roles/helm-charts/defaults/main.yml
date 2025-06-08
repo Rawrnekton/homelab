@@ -1,0 +1,11 @@
+---
+# defaults file for roles/helm-charts
+
+helm_charts:
+  - name: sealed-secrets
+    repo_url: https://bitnami-labs.github.io/sealed-secrets
+    release_name: sealed-secrets
+    release_namespace: kube-system
+    values:
+      fullnameOverride: sealed-secrets-controller
+      
