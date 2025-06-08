@@ -1,5 +1,0 @@
----
-# tasks file for ./ansible/roles/sealed-secrets
-- name: Install Sealed Secrets
-  ansible.builtin.include_tasks: sealed-secrets.yml
-  when: inventory_hostname == groups['argo'][0]
