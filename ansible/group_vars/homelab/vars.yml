@@ -7,6 +7,7 @@ internal_ip_gateway: 192.168.2.170
 services:
     - name: mealie
       dns_target: "{{ internal_ip_gateway }}"
+      is_external: true
     - name: rancher
       dns_target: "{{ internal_ip_gateway }}"
     - name: homepage
@@ -14,6 +15,9 @@ services:
 
 dns_services: "{{ services }}"
 dns_domain_suffix: "cindergla.de"
+
+wireguard_ispconfig_username: "{{ vault_wireguard_ispconfig_username }}"
+wireguard_ispconfig_password: "{{ vault_wireguard_ispconfig_password }}"
 
 ### cluster-setup
 cluster_setup_k3s_token: "{{ vault_cluster_setup_k3s_token }}"

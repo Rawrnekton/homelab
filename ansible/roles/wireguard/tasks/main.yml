@@ -30,7 +30,7 @@
   register: wireguard_public_key
   changed_when: false
 
-- name: register priv key value
+- name: Register priv key value
   ansible.builtin.shell: "cat /etc/wireguard/private.key"
   register: wireguard_private_key
   changed_when: false
@@ -45,3 +45,94 @@
     backup: true
   # i have not found out why this always comes back changed in check_mode
   when: not ansible_check_mode
+
+- name: Log into IspConfig and retrieve session_id
+  ansible.builtin.uri:
+    url: https://admin.cindergla.de/remote/json.php?login
+    method: POST
+    headers:
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      username: "{{ wireguard_ispconfig_username }}"
+      password: "{{ wireguard_ispconfig_password }}"
+    return_content: true
+  register: session_id_raw
+  delegate_to: localhost
+  run_once: true
+
+- name: Flatten variable to be more usable
+  ansible.builtin.set_fact:
+    session_id: "{{ session_id_raw.json.response }}"
+
+- name: Create Vhost and proxy on VPS for each external service
+  ansible.builtin.uri:
+    url: https://admin.cindergla.de/remote/json.php?sites_web_domain_add
+    method: POST
+    headers:
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      session_id: "{{ session_id }}"
+      client_id: "0"
+      params:
+        server_id: "1"
+        ip_address: "*"
+        domain: "{{ item.name }}.cindergla.de"
+        type: "vhost"
+        parent_domain_id: "0"
+        vhost_type: "name"
+        hd_quota: "100000"
+        traffic_quota: "-1"
+        cgi: "n"
+        ssi: "n"
+        suexec: "y"
+        errordocs: "1"
+        is_subdomainwww: "1"
+        subdomain: "none"
+        php: "no"
+        proxy_protocol: "y"
+        ruby: "n"
+        redirect_type: ""
+        redirect_path: ""
+        ssl: "n"
+        ssl_letsencrypt: "n"
+        ssl_state: ""
+        ssl_locality: ""
+        ssl_organisation: ""
+        ssl_organisation_unit: ""
+        ssl_country: ""
+        ssl_domain: ""
+        ssl_request: ""
+        ssl_key: ""
+        ssl_cert: ""
+        ssl_bundle: ""
+        ssl_action: ""
+        stats_password: ""
+        stats_type: ""
+        storage_time_log_files: "7"
+        allow_override: "All"
+        apache_directives: |-
+          ProxyPreserveHost on
+          SSLProxyEngine on
+
+          ProxyPass /.well-known/acme-challenge !
+          ProxyPass / https://10.0.0.2/
+          ProxyPassReverse / https://10.0.0.2/
+        php_open_basedir: "/"
+        custom_php_ini: ""
+        pm: "ondemand"
+        pm_max_children: "500"
+        pm_max_requests: "0"
+        pm_process_idle_timeout: "5"
+        backup_interval: "daily"
+        backup_copies: "7"
+        active: "y"
+        traffic_quota_lock: "n"
+        http_port: "80"
+        https_port: "443"
+        tideways_sample_rate: "25"
+  delegate_to: localhost
+  run_once: true
+  loop: "{{ services }}"
+  when: item.is_external | default(false) | bool
