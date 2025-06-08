@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Überprüfen, ob ein Service-Name übergeben wurde
 if [ -z "$1" ]; then
   echo "Bitte den Namen des Services als Parameter übergeben."
