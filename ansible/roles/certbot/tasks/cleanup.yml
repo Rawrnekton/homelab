@@ -1,0 +1,42 @@
+---
+- name: Build the desired-FQDN list
+  ansible.builtin.set_fact:
+    wanted_fqdns: >-
+      {{ services
+         | map(attribute='name')
+         | map('regex_replace', '^(.*)$', '\1.' + dns_domain_suffix)
+         | list }}
+
+- name: List existing cert-name directories (one per cert)
+  ansible.builtin.find:
+    paths: /etc/letsencrypt/live
+    file_type: directory
+    depth: 1
+  register: live_dirs
+
+- name: Determine certs to delete
+  ansible.builtin.set_fact:
+    stale_certs: >-
+      {{ live_dirs.files
+         | map(attribute='path')
+         | map('basename')
+         | difference(wanted_fqdns) }}
+
+- name: Delete unused Let’s Encrypt certificates in LE dir
+  ansible.builtin.command: >
+    certbot delete -n --cert-name {{ item }}
+  loop: "{{ stale_certs }}"
+  loop_control:
+    label: "{{ item }}"
+  register: certbot_delete
+  changed_when: "'Successfully deleted certificate' in certbot_delete.stdout"
+
+- name: Delete unused Let’s Encrypt certificates in /etc/haproxy/ssl/
+  ansible.builtin.command: >
+    rm /etc/haproxy/ssl/{{ item | regex_replace('\..*$', '.pem') }}
+  loop: "{{ stale_certs }}"
+  loop_control:
+    label: "{{ item }}"
+  register: certbot_delete
+  failed_when: false
+  changed_when: certbot_delete.rc == 0

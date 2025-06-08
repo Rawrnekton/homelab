@@ -10,3 +10,6 @@
 
 - name: Install cron to renew existing certificates
   ansible.builtin.import_tasks: create_valid_certificates.yml
+
+- name: Cleanup unused certificates
+  ansible.builtin.import_tasks: cleanup.yml
