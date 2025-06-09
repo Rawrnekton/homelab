@@ -1,0 +1,17 @@
+#SPDX-License-Identifier: MIT-0
+---
+# handlers file for roles/argocd
+- name: ARGOCD | Restart ArgoCD-Server
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    api_version: apps/v1
+    state: patched
+    kind: Deployment
+    namespace: argocd
+    name: argocd-server
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              please-kill-me: "{{ ansible_date_time.epoch }}"
