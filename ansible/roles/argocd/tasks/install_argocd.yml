@@ -1,0 +1,75 @@
+---
+- name: Install dependencies
+  ansible.builtin.apt:
+    name: python3-pip
+    state: present
+
+- name: Install Kubernetes Python client and friends
+  ansible.builtin.pip:
+    name:
+      - "kubernetes"
+    state: present
+    break_system_packages: true
+
+- name: Ensure namespace argocd is present
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: argocd
+
+- name: Fetch Argo CD upstream install manifest
+  ansible.builtin.get_url:
+    url: "{{ argocd_manifest_url }}"
+    dest: "{{ argocd_manifest_local }}"
+    mode: "0644"
+  register: download_argocd
+
+- name: Apply Argo CD manifest
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    src: "{{ argocd_manifest_local }}"
+    state: present
+    namespace: argocd
+  register: argocd_apply
+
+- name: Disable TLS on server
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cmd-params-cm
+        namespace: argocd
+      data:
+        server.insecure: "true"
+  notify: ARGOCD | Restart ArgoCD-Server
+
+- name: Apply ArgoCD Ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: argocd-server
+        namespace: argocd
+      spec:
+        ingressClassName: traefik
+        rules:
+          - host: argocd.cindergla.de
+            http:
+              paths:
+                - backend:
+                    service:
+                      name: argocd-server
+                      port:
+                        number: 80
+                  path: /
+                  pathType: Prefix

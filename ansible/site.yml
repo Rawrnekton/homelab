@@ -32,3 +32,4 @@
     - cluster-setup
     - longhorn
     - helm-charts
+    - argocd

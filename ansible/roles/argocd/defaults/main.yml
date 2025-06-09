@@ -1,0 +1,8 @@
+---
+# defaults file for roles/argocd
+
+argocd_manifest_version: v3.0.5
+argocd_manifest_url: >
+  https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_manifest_version }}/manifests/install.yaml
+argocd_kubeconfig_path: /root/.kube/config
+argocd_manifest_local: /tmp/argocd-install.yaml
