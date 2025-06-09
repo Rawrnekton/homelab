@@ -1,0 +1,15 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: database
+  namespace: mealie
+spec:
+  encryptedData:
+    POSTGRES_PASSWORD: AgAkko5CAxJEBjpTeUYTLCyQIxh/9J6u1p9c3RJw8SDnArAqff6DswX0qt9Ag9Yp2c0N996XmclWZ6xlmzrX/1/94kOTBJxrEJZjdesK8m8WgUyWrgRN6DcqCmwiFXtoulgeGegYcRpKskSJVfPUxXflLPHDdzcOL6pcQDTIs3gOEkxfIzFwp6eKPMyeAzEXycHvEVbkVug96Uxvsn6WtpoUboo3MbWY+nztzLEuPhC9207V0e2bd9ghc051MQGvOUQV1k6XHw1HqHH0dLlkP3She74n6vOEPpCW4YTzYUI7eN5UABgnmkm0vejSj1wHyIqsZbNlTY8RBk6bLBKdmz8rcWa78lM0dzUwDtScfzIn5W6u2ZpXnVLMX8q9yCJk1jpswKEIKWqHArOxrpCA0na+tROmbKb0KnFbJXX+V2QE50IT7CUAvkrP1NEQ4atSd0c9NQh/DirGaxSSRi+iJbNLTHoV++wsjVhGKpGg6L0OjAOs0+rErxoiHCfCX0GYWIpIuartNE6jXObhSvWAKbMS5Atq4hiwk/r9a18qWIXBL2mI9aGioHOHW0jsUmKGrjKvAdVLcQf1dIHl0cKQ5mBkgvLXIH1YEChCVl1jwGKgILg2exQpb1ax69PtAURQDPmsGV4erMpzV2uVHkZVpMV9aBIwow9nA8vPl1WiNVQJiOSDB8R3/dlSd21PtexB/bs4yDUxCMvMvjrWfM+ALGXr0mN68PtwCbNXQaE2DJEQxHp34GKqzYcw
+  template:
+    metadata:
+      creationTimestamp: null
+      name: database
+      namespace: mealie
