@@ -84,13 +84,13 @@
       apiVersion: argoproj.io/v1alpha1
       kind: ApplicationSet
       metadata:
-        name: applications-from-github
+        name: argo-applications
         namespace: argocd
       spec:
         generators:
           - git:
               repoURL: https://github.com/rawrnekton/homelab.git
-              revision: dev
+              revision: HEAD
               directories:
                 - path: "manifests/argo_applications/*"
         template:
@@ -100,7 +100,7 @@
             project: default
             source:
               repoURL: https://github.com/rawrnekton/homelab.git
-              targetRevision: dev
+              targetRevision: HEAD
               path: '{{path}}'
               kustomize: {}
             destination:
