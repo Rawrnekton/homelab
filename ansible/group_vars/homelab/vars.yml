@@ -14,7 +14,7 @@ services:
       dns_target: "{{ internal_ip_gateway }}"
     - name: argocd
       dns_target: "{{ internal_ip_gateway }}"
-    - name: authentik
+    - name: auth
       dns_target: "{{ internal_ip_gateway }}"
 
 dns_services: "{{ services }}"
