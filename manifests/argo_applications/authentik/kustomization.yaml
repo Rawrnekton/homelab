@@ -50,3 +50,9 @@ helmCharts:
         enabled: false
       redis:
         enabled: true
+        master:
+          shareProcessNamespace: true
+          persistence:
+            size: 4Gi
+
+        enabled: true
