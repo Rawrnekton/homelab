@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
 - mealie-mealie-database-secret-sealed.yaml
 - mealie-mealie-smtp-sealed.yaml
+- mealie-mealie-authentik-oidc-credentials-sealed.yaml
