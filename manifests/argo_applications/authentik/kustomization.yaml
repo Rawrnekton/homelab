@@ -25,7 +25,7 @@ helmCharts:
       server:
         env: &authentik_env_vars
           - name: AUTHENTIK_POSTGRESQL__HOST
-            value: database-rw
+            value: authentik-db-rw
           - name: AUTHENTIK_POSTGRESQL__NAME
             value: authentik
           - name: AUTHENTIK_POSTGRESQL__USER
