@@ -13,6 +13,7 @@ labels:
 resources:
   - sealed-secrets/
   - namespace.yml
+  - database.yml
   - pvc.yml
   - deployment.yml
   - service.yml

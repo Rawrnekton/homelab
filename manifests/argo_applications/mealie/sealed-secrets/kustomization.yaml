@@ -2,5 +2,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- mealie-database-sealed.yaml
-- mealie-smtp-sealed.yaml
+- mealie-mealie-database-secret-sealed.yaml
+- mealie-mealie-smtp-sealed.yaml

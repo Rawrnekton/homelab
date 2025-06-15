@@ -15,9 +15,9 @@ spec:
             - containerPort: 9000
           envFrom:
             - secretRef:
-                name: database
+                name: mealie-database-secret
             - secretRef:
-                name: smtp
+                name: mealie-smtp
           env:
             - name: ALLOW_SIGNUP
               value: "false"
@@ -30,7 +30,7 @@ spec:
             - name: POSTGRES_USER
               value: "mealie"
             - name: POSTGRES_SERVER
-              value: "database-rw.database"
+              value: "mealie-db-rw"
             - name: POSTGRES_PORT
               value: "5432"
             - name: POSTGRES_DB
