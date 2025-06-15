@@ -11,7 +11,42 @@ labels:
 
 resources:
   - sealed-secrets/
-  - application.yml
   - database.yml
   - namespace.yml
   - ingress.yml
+
+helmCharts:
+  - name: authentik
+    repo: https://charts.goauthentik.io
+    version: 2025.6.1
+    releaseName: authentik
+    namespace: authentik
+    valuesInline:
+      server:
+        env: &authentik_env_vars
+          - name: AUTHENTIK_POSTGRESQL__HOST
+            value: database-rw
+          - name: AUTHENTIK_POSTGRESQL__NAME
+            value: authentik
+          - name: AUTHENTIK_POSTGRESQL__USER
+            value: authentik
+          - name: AUTHENTIK_POSTGRESQL__PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: authentik-database-secret
+                key: password
+          - name: AUTHENTIK_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: authentik-secret-key
+                key: secret-key
+      worker:
+        env: *authentik_env_vars
+      authentik:
+        # I think this setting is required
+        # the secret gets set via env variable, see above
+        secret_key: ""
+      postgresql:
+        enabled: false
+      redis:
+        enabled: true
