@@ -15,8 +15,6 @@ spec:
             - containerPort: 9000
           envFrom:
             - secretRef:
-                name: mealie-database-secret
-            - secretRef:
                 name: mealie-smtp
           env:
             - name: ALLOW_SIGNUP
@@ -35,6 +33,11 @@ spec:
               value: "5432"
             - name: POSTGRES_DB
               value: "mealie"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mealie-database-secret
+                  key: password
           volumeMounts:
             - name: mealie-data
               mountPath: /app/data
