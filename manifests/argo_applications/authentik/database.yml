@@ -11,7 +11,7 @@ spec:
       database: authentik
       owner: authentik
       secret:
-        name: database-secrets
+        name: authentik-database-secret
   storage:
     size: 1Gi
     storageClass: longhorn-r1
