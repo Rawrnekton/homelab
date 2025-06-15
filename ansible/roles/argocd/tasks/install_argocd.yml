@@ -111,3 +111,16 @@
                 prune: true
                 selfHeal: true
       {% endraw %}
+
+- name: Patch ArgoCD to allow helm
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+        namespace: argocd
+      data:
+        kustomize.buildOptions: --enable-helm
