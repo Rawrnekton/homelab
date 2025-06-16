@@ -16,6 +16,7 @@ services:
       dns_target: "{{ internal_ip_gateway }}"
     - name: auth
       dns_target: "{{ internal_ip_gateway }}"
+      is_external: true
 
 dns_services: "{{ services }}"
 dns_domain_suffix: "cindergla.de"
