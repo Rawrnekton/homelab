@@ -27,6 +27,10 @@ spec:
               value: "https://mealie.cindergla.de"
             - name: DB_ENGINE
               value: "postgres"
+            - name: DEFAULT_GROUP
+              value: "Friends"
+            - name: DEFAULT_HOUSEHOLD
+              valus: "Das Restaurant am Ende des Universums"
             - name: POSTGRES_USER
               value: "mealie"
             - name: POSTGRES_SERVER
