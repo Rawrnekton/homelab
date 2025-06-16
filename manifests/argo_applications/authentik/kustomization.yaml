@@ -54,5 +54,3 @@ helmCharts:
           shareProcessNamespace: true
           persistence:
             size: 4Gi
-
-        enabled: true
