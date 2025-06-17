@@ -3,33 +3,33 @@
   hosts: homelab
   become: true
   roles:
-    - common
+    - { role: common, tags: [common] }
 
-- name: Setup gateway for proxying and tls termination
+- name: Setup gateway for proxying and TLS termination
   hosts: gateway
   become: true
   roles:
-    - haproxy
-    - certbot
+    - { role: haproxy, tags: [haproxy] }
+    - { role: certbot, tags: [certbot] }
 
-- name: Setup wireguard tunnel between gateway and vps
+- name: Setup WireGuard tunnel between gateway and VPS
   hosts: gateway:vps
   become: true
   roles:
-    - wireguard
+    - { role: wireguard, tags: [wireguard] }
 
-- name: Setup dns records for services
+- name: Setup DNS records for services
   hosts: dns
   become: true
   roles:
-    - dns
+    - { role: dns, tags: [dns] }
 
 - name: Provision Cluster
   hosts: argo
   become: true
   roles:
-    - lvm-setup
-    - cluster-setup
-    - longhorn
-    - helm-charts
-    - argocd
+    - { role: lvm-setup, tags: [lvm] }
+    - { role: cluster-setup, tags: [cluster] }
+    - { role: longhorn, tags: [longhorn] }
+    - { role: helm-charts, tags: [helm] }
+    - { role: argocd, tags: [argocd] }
