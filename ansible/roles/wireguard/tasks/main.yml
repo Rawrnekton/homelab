@@ -91,10 +91,11 @@
         is_subdomainwww: "1"
         subdomain: "none"
         php: "no"
-        proxy_protocol: "y"
+        proxy_protocol: "n" # this seems counter intuitive but this on "y" breaks the proxy
         ruby: "n"
         redirect_type: ""
         redirect_path: ""
+        rewrite_to_https: "y"
         ssl: "y"
         ssl_letsencrypt: "y"
         ssl_state: ""
