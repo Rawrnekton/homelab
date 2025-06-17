@@ -14,6 +14,7 @@ services:
       dns_target: "{{ internal_ip_gateway }}"
     - name: argocd
       dns_target: "{{ internal_ip_gateway }}"
+      is_external: true
     - name: auth
       dns_target: "{{ internal_ip_gateway }}"
       is_external: true
@@ -49,3 +50,8 @@ helm_charts:
     release_values:
       fullnameOverride: "sealed-secrets-controller"
   # - name: longhorn has its own role
+
+### argocd
+
+argocd_authentik_oauth_client_id: "{{ vault_argocd_authentik_oauth_client_id }}"
+argocd_authentik_oauth_client_secret: "{{ vault_argocd_authentik_oauth_client_secret }}"

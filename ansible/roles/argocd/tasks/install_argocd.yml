@@ -124,3 +124,60 @@
         namespace: argocd
       data:
         kustomize.buildOptions: --enable-helm
+
+- name: Enable OIDC login to argocd with authentik
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+        namespace: argocd
+      data:
+        url: https://argocd.cindergla.de
+        dex.config: |
+            connectors:
+            - config:
+                issuer: https://auth.cindergla.de/application/o/argocd/
+                clientID: "{{ argocd_authentik_oauth_client_id }}"
+                clientSecret: "{{ argocd_authentik_oauth_client_secret }}"
+                insecureEnableGroups: true
+                scopes:
+                  - openid
+                  - profile
+                  - email
+              name: authentik
+              type: oidc
+              id: authentik
+
+- name: Enable admin role mapping from authentik role
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-rbac-cm
+        namespace: argocd
+      data:
+        policy.csv: |
+          g, argocd Admin, role:admin
+
+- name: Disable default local admin user
+  kubernetes.core.k8s:
+    kubeconfig: "{{ argocd_kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+        namespace: argocd
+        labels:
+          app.kubernetes.io/name: argocd-cm
+          app.kubernetes.io/part-of: argocd
+      data:
+        admin.enabled: "false"
