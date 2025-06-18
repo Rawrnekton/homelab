@@ -114,12 +114,15 @@
         storage_time_log_files: "7"
         allow_override: "All"
         apache_directives: |-
-          ProxyPreserveHost on
-          SSLProxyEngine on
+          SSLProxyEngine     on
+          ProxyPreserveHost  on
+          Protocols          http/1.1
 
-          ProxyPass /.well-known/acme-challenge !
-          ProxyPass / https://10.0.0.2/
-          ProxyPassReverse / https://10.0.0.2/
+          ProxyPass 	     /.well-known/acme-challenge !
+          ProxyPass          /  https://10.0.0.2/  upgrade=websocket keepalive=On
+          ProxyPassReverse   /  https://10.0.0.2/
+
+          RequestHeader set X-Forwarded-Proto "https"
         php_open_basedir: "/"
         custom_php_ini: ""
         pm: "ondemand"
