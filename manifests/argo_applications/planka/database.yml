@@ -1,0 +1,17 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: planka-db
+  namespace: planka
+spec:
+  instances: 3
+  bootstrap:
+    initdb:
+      database: planka
+      owner: planka
+      secret:
+        name: planka-database-secret
+  storage:
+    size: 1Gi
+    storageClass: longhorn-r1
