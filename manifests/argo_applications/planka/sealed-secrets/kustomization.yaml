@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- planka-planka-authentik-oidc-credentials-sealed.yaml
+- planka-planka-database-secret-sealed.yaml
+- planka-planka-smtp-sealed.yaml
+- planka-planka-secret-sealed.yaml

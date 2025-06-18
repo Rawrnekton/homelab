@@ -1,0 +1,21 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: planka
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: todo.cindergla.de
+      http:
+        paths:
+          - backend:
+              service:
+                name: planka
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - todo.cindergla.de
