@@ -18,7 +18,7 @@ resources:
 helmCharts:
   - name: authentik
     repo: https://charts.goauthentik.io
-    version: 2025.6.2
+    version: 2025.6.3
     releaseName: authentik
     namespace: authentik
     valuesInline:
