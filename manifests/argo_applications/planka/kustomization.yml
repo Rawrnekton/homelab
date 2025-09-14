@@ -22,4 +22,4 @@ resources:
 images:
   - name: planka
     newName: ghcr.io/plankanban/planka
-    newTag: 2.0.0-rc.3
+    newTag: 2.0.0-rc.4
