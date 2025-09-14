@@ -110,6 +110,9 @@
               automated:
                 prune: true
                 selfHeal: true
+        ignoreApplicationDifferences:
+          - jsonPointers:
+            - /spec/syncPolicy
       {% endraw %}
 
 - name: Patch ArgoCD to allow helm
