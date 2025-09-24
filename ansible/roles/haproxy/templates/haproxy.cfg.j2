@@ -41,6 +41,6 @@ frontend https-in
 backend backend_hosts
     mode http
 {% for server in groups['argo'] %}
-    server {{ server }} {{ hostvars[server]['ansible_default_ipv4']['address'] }}:443 ssl verify none
+    server {{ server }} {{ hostvars[server]['ansible_default_ipv4']['address'] }}:443 ssl verify none check
 {% endfor %}
 
