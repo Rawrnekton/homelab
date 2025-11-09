@@ -43,8 +43,6 @@
     group: root
     mode: "0600"
     backup: true
-  # i have not found out why this always comes back changed in check_mode
-  when: not ansible_check_mode
 
 - name: Log into IspConfig and retrieve session_id
   ansible.builtin.uri:
@@ -118,7 +116,7 @@
           ProxyPreserveHost  on
           Protocols          http/1.1
 
-          ProxyPass 	     /.well-known/acme-challenge !
+          ProxyPass          /.well-known/acme-challenge !
           ProxyPass          /  https://10.0.0.2/  upgrade=websocket keepalive=On
           ProxyPassReverse   /  https://10.0.0.2/
 
