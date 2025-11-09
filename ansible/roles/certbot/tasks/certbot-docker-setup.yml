@@ -3,7 +3,7 @@
   git:
     repo: https://github.com/coldfix/certbot-dns-netcup.git
     dest: /opt/certbot-dns-netcup
-    update: yes
+    update: false
 
 - name: Build Docker image for certbot-dns-netcup
   docker_image:
