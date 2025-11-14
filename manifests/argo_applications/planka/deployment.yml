@@ -4,6 +4,7 @@ kind: Deployment
 metadata:
   name: planka
 spec:
+  replicas: 1
   strategy:
     type: Recreate
   template:
