@@ -9,7 +9,7 @@ spec:
   instances: 2
 
   storage:
-    size: 1Gi
+    size: 5Gi
     storageClass: longhorn-r1
 
   imageName: ghcr.io/tensorchord/cloudnative-vectorchord:16.9-0.4.3
