@@ -19,7 +19,7 @@ resources:
 helmCharts:
   - name: immich
     repo: https://immich-app.github.io/immich-charts
-    version: 0.10.1
+    version: 0.10.3
     releaseName: immich
     namespace: immich
     valuesInline:
@@ -28,7 +28,7 @@ helmCharts:
           containers:
             main:
               image:
-                tag: v2.2.3
+                tag: v2.3.1
       server:
         controllers:
           main:
