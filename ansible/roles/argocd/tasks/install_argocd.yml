@@ -110,6 +110,8 @@
               automated:
                 prune: true
                 selfHeal: true
+              syncOptions:
+                - CreateNamespace=true
         ignoreApplicationDifferences:
           - jsonPointers:
             - /spec/syncPolicy
