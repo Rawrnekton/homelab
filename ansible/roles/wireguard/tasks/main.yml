@@ -29,11 +29,13 @@
   ansible.builtin.shell: "cat /etc/wireguard/private.key | wg pubkey"
   register: wireguard_public_key
   changed_when: false
+  check_mode: false
 
 - name: Register priv key value
   ansible.builtin.shell: "cat /etc/wireguard/private.key"
   register: wireguard_private_key
   changed_when: false
+  check_mode: false
 
 - name: Create wireguard configuration
   ansible.builtin.template:
@@ -58,6 +60,7 @@
   register: session_id_raw
   delegate_to: localhost
   run_once: true
+  check_mode: false
 
 - name: Flatten variable to be more usable
   ansible.builtin.set_fact:
