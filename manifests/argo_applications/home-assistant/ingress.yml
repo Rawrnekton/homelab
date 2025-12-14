@@ -1,0 +1,32 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: home-assistant
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: fliederhof.cindergla.de
+      http:
+        paths:
+          - backend:
+              service:
+                name: home-assistant
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+    - host: fliederhof.k8s.internal.cindergla.de
+      http:
+        paths:
+          - backend:
+              service:
+                name: home-assistant
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - fliederhof.cindergla.de
+        - fliederhof.k8s.internal.cindergla.de

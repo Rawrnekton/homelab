@@ -24,6 +24,9 @@ services:
     - name: memories
       dns_target: "{{ internal_ip_gateway }}"
       is_external: true
+    - name: fliederhof
+      dns_target: "{{ internal_ip_gateway }}"
+      is_external: false
 
 dns_services: "{{ services }}"
 dns_domain_suffix: "cindergla.de"
