@@ -6,3 +6,9 @@ services:
   - name: service_name_2
 
 
+haproxy_additional_services:
+  - name: service_name_3
+    mode: tcp | http
+    check_backend: True | False
+    external_port: 1234 # port to listen on
+    internal_port: 5678 # port to forward to
