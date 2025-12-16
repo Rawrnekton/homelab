@@ -1,0 +1,7 @@
+---
+haproxy_additional_services:
+  - name: mqtt
+    mode: tcp
+    check_backend: True
+    external_port: 1883
+    internal_port: 31883
