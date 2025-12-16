@@ -44,3 +44,17 @@ backend backend_hosts
     server {{ server }} {{ hostvars[server]['ansible_default_ipv4']['address'] }}:443 ssl verify none check
 {% endfor %}
 
+{% for service in haproxy_additional_services %}
+frontend {{ service.name }}-in
+    bind *:{{ service.external_port }}
+    mode {{ service.mode }}
+    use_backend backend_{{ service.name }}
+
+backend backend_{{ service.name }}
+    mode {{ service.mode }}
+    option tcp-check
+{% for server in groups['argo'] %}
+    server {{ server }} {{ hostvars[server]['ansible_default_ipv4']['address'] }}:{{ service.internal_port }} {% if service.check_backend | default(false) %}check {% endif %}
+
+{% endfor %}
+{% endfor %}
