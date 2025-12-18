@@ -27,6 +27,9 @@ services:
     - name: fliederhof
       dns_target: "{{ internal_ip_gateway }}"
       is_external: false
+    - name: whoami
+      dns_target: "{{ internal_ip_gateway }}"
+      is_external: false
 
 dns_services: "{{ services }}"
 dns_domain_suffix: "cindergla.de"
