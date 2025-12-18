@@ -1,0 +1,12 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+      - "--entrypoints.websecure.forwardedheaders.trustedips=192.168.2.170/32,10.42.0.0/16"
+      - "--entrypoints.web.forwardedheaders.trustedips=192.168.2.170/32,10.42.0.0/16"
