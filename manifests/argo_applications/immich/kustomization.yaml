@@ -34,6 +34,10 @@ helmCharts:
           main:
             containers:
               main:
+                strategy: RollingUpdate
+                rollingUpdate:
+                  surge: 0
+                  unavailable: 1
                 env:
                   DB_HOSTNAME: immich-db-rw
                   DB_USERNAME: immich
