@@ -32,9 +32,9 @@ helmCharts:
       server:
         controllers:
           main:
+            strategy: Recreate
             containers:
               main:
-                strategy: Recreate
                 env:
                   DB_HOSTNAME: immich-db-rw
                   DB_USERNAME: immich
