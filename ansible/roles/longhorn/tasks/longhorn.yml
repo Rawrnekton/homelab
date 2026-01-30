@@ -28,6 +28,7 @@
   ansible.builtin.file:
     path: /root/k8s-manifests/
     state: directory
+    mode: '0755'
 
 - name: Create storage class with only one replica
   ansible.builtin.copy:
@@ -36,7 +37,7 @@
 
 - name: Apply the storage class yml
   ansible.builtin.shell: >
-    kubectl apply 
+    kubectl apply
     -f /root/k8s-manifests/longhorn-r1.yml
   args:
     executable: /bin/bash
