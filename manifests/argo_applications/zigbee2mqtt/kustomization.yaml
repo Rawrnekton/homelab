@@ -1,0 +1,69 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: zigbee2mqtt
+
+labels:
+- pairs:
+    environment: homelab
+- includeSelectors: true
+  pairs:
+    app: zigbee2mqtt
+
+helmCharts:
+- name: zigbee2mqtt
+  namespace: zigbee2mqtt
+  releaseName: zigbee2mqtt
+  repo: https://charts.zigbee2mqtt.io
+  valuesInline:
+    ingress:
+      annotations: {}
+      enabled: true
+      hosts:
+      - host: zigbee2mqtt.cindergla.de
+        paths:
+        - path: /
+          pathType: Prefix
+        - path: /api
+          pathType: Prefix
+      ingressClassName: traefik
+      labels: {}
+      tls: []
+    service:
+      port: 8080
+      type: ClusterIP
+    statefulset:
+      securityContext:
+        capabilities:
+          add: []
+        privileged: false
+      storage:
+        annotations: {}
+        enabled: true
+        size: 2Gi
+        storageClassName: longhorn
+    zigbee2mqtt:
+      frontend:
+        auth_token: this-is-set-via-env-variable-in-the-patch
+        enabled: true
+        port: 8080
+      homeassistant:
+        enabled: true
+      mqtt:
+        password: this-is-set-via-env-variable-in-the-patch
+        server: mqtt://mosquitto.mqtt.svc.cluster.local:1883
+        user: zigbee2mqtt
+      permit_join: false
+      serial:
+        adapter: ember
+        baudrate: 115200
+        disable_led: false
+        port: tcp://192.168.2.167:6638
+        rtscts: false
+      timezone: Europe/Berlin
+  version: 2.7.1
+
+resources:
+- sealed-secrets/
+
+patches:
+- path: patch-sts-env-secrets.yaml
