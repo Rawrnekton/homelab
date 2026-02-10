@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: infra
+spec:
+  generators:
+    - git:
+        repoURL: &repo https://github.com/rawrnekton/homelab.git
+        revision: &rev HEAD
+        files:
+          - path: "argo/infra/**/kustomization.yaml"
+  template:
+    metadata:
+      name: '{{ path.basename }}'
+      labels:
+        cindergla.de/type: infra
+    spec:
+      project: default
+      source:
+        repoURL: *repo
+        targetRevision: *rev
+        path: '{{ path }}'
+        kustomize: {}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ path[3] }}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+  ignoreApplicationDifferences:
+    - jsonPointers:
+      - /spec/syncPolicy

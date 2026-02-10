@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+helmCharts:
+- name: argo-cd
+  releaseName: argocd
+  repo: https://argoproj.github.io/argo-helm
+  valuesInline:
+    applicationSet:
+      extraArgs:
+      - --enable-new-git-file-globbing
+    configs:
+      cm:
+        dex.config: |
+          connectors:
+            - config:
+                issuer: https://auth.cindergla.de/application/o/argocd/
+                clientID: SawKoPBbwIda29xo9NJCUvy3eEY36b5e2g5zovOU
+                clientSecret: $argocd-sso:clientSecret
+                insecureEnableGroups: true
+                scopes:
+                  - openid
+                  - profile
+                  - email
+              name: authentik
+              type: oidc
+              id: authentik
+        kustomize.buildOptions: --enable-helm
+        url: https://argocd.cindergla.de
+        admin.enabled: false
+      rbac:
+        policy.csv: |
+          g, argocd Admin, role:admin
+      params:
+        server.insecure: "true"
+  version: 9.3.4
+  includeCRDs: true
+
+resources:
+- ingress.yaml
+- clientSecret-sealed.yaml
