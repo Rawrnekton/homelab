@@ -1,0 +1,58 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: planka
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      containers:
+        - name: planka
+          image: planka
+          ports:
+            - containerPort: 1337
+          envFrom:
+            - secretRef:
+                name: planka-authentik-oidc-credentials
+            - secretRef:
+                name: planka-smtp
+          env:
+            - name: BASE_URL
+              value: "https://todo.cindergla.de"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: planka-database-secret
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://planka:$(POSTGRES_PASSWORD)@planka-db-rw/planka"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: planka-secret
+                  key: secret
+          volumeMounts:
+            - name: planka-favicons
+              mountPath: /app/public/favicons
+            - name: planka-user-avatars
+              mountPath: /app/public/user-avatars
+            - name: planka-background-images
+              mountPath: /app/public/background-images
+            - name: planka-attachments
+              mountPath: /app/private/attachments/
+      volumes:
+        - name: planka-favicons
+          persistentVolumeClaim:
+            claimName: planka-favicons
+        - name: planka-user-avatars
+          persistentVolumeClaim:
+            claimName: planka-user-avatars
+        - name: planka-background-images
+          persistentVolumeClaim:
+            claimName: planka-background-images
+        - name: planka-attachments
+          persistentVolumeClaim:
+            claimName: planka-attachments
