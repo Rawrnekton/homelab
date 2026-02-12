@@ -10,7 +10,6 @@ labels:
     app: mealie
 
 resources:
-- namespace.yaml
 - database.yaml
 - pvc.yaml
 - deployment.yaml
