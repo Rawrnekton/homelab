@@ -10,8 +10,6 @@ labels:
     app: planka
 
 resources:
-- sealed-secrets/
-- namespace.yaml
 - database.yaml
 - pvcs.yaml
 - deployment.yaml
