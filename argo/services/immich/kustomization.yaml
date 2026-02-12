@@ -11,7 +11,6 @@ labels:
 
 resources:
 - database.yaml
-- namespace.yaml
 - ingress.yaml
 - pvc.yaml
 - sealed-secrets/immich-immich-database-secret-sealed.yaml
