@@ -10,7 +10,7 @@ spec:
         repoURL: &repo https://github.com/rawrnekton/homelab.git
         revision: &rev HEAD
         files:
-          - path: "argo/services/kustomization.yaml"
+          - path: "argo/services/**/kustomization.yaml"
   template:
     metadata:
       name: '{{ .path.path | replace "argo/services/" "" | replace "/" "-" | lower }}'
