@@ -11,11 +11,11 @@ labels:
       app: home-assistant
 
 resources:
-  - namespace.yml
-  - pvc.yml
-  - deployment.yml
-  - service.yml
-  - ingress.yml
+  - namespace.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
 
 images:
   - name: home-assistant

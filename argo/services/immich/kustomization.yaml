@@ -3,60 +3,57 @@ kind: Kustomization
 namespace: immich
 
 labels:
-  - pairs:
-      environment: homelab
-  - includeSelectors: true
-    pairs:
-      app: immich
+- pairs:
+    environment: homelab
+- includeSelectors: true
+  pairs:
+    app: immich
 
 resources:
-  - sealed-secrets/
-  - database.yml
-  - namespace.yml
-  - ingress.yml
-  - pvc.yml
+- database.yaml
+- namespace.yaml
+- ingress.yaml
+- pvc.yaml
+- sealed-secrets/immich-immich-database-secret-sealed.yaml
 
 helmCharts:
-  - name: immich
-    repo: https://immich-app.github.io/immich-charts
-    version: 0.10.3
-    releaseName: immich
-    namespace: immich
-    valuesInline:
+- name: immich
+  namespace: immich
+  releaseName: immich
+  repo: https://immich-app.github.io/immich-charts
+  valuesInline:
+    controllers:
+      main:
+        containers:
+          main:
+            image:
+              tag: v2.5.3
+    immich:
+      persistence:
+        library:
+          existingClaim: immich-library-data-iscsi
+    machine-learning:
+      enabled: true
+      persistence:
+        cache:
+          enabled: true
+          size: 10Gi
+          type: persistentVolumeClaim
+    server:
       controllers:
         main:
           containers:
             main:
-              image:
-                tag: v2.5.3
-      server:
-        controllers:
-          main:
-            strategy: Recreate
-            containers:
-              main:
-                env:
-                  DB_HOSTNAME: immich-db-rw
-                  DB_USERNAME: immich
-                  DB_PASSWORD:
-                    valueFrom:
-                      secretKeyRef:
-                        name: immich-database-secret
-                        key: password
-                  DB_DATABASE_NAME: immich
-
-      valkey:
-        enabled: true
-
-      immich:
-        persistence:
-          library:
-            existingClaim: immich-library-data-iscsi
-
-      machine-learning:
-        enabled: true
-        persistence:
-          cache:
-            enabled: true
-            size: 10Gi
-            type: persistentVolumeClaim
+              env:
+                DB_DATABASE_NAME: immich
+                DB_HOSTNAME: immich-db-rw
+                DB_PASSWORD:
+                  valueFrom:
+                    secretKeyRef:
+                      key: password
+                      name: immich-database-secret
+                DB_USERNAME: immich
+          strategy: Recreate
+    valkey:
+      enabled: true
+  version: 0.10.3
