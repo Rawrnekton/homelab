@@ -3,6 +3,8 @@ kind: ApplicationSet
 metadata:
   name: infra
 spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
   generators:
     - git:
         repoURL: &repo https://github.com/rawrnekton/homelab.git
