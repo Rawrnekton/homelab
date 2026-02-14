@@ -3,54 +3,70 @@ kind: Kustomization
 namespace: authentik
 
 labels:
-  - pairs:
-      environment: homelab
-  - includeSelectors: true
-    pairs:
-      app: authentik
+- pairs:
+    environment: homelab
+- includeSelectors: true
+  pairs:
+    app: authentik
 
 resources:
-  - sealed-secrets/
-  - database.yml
-  - namespace.yml
-  - ingress.yml
+- database.yml
+- ingress.yml
+- sealed-secrets/authentik-authentik-database-secret-sealed.yaml
+- sealed-secrets/authentik-authentik-secret-key-sealed.yaml
 
 helmCharts:
-  - name: authentik
-    repo: https://charts.goauthentik.io
-    version: 2025.12.3
-    releaseName: authentik
-    namespace: authentik
-    valuesInline:
-      server:
-        env: &authentik_env_vars
-          - name: AUTHENTIK_POSTGRESQL__HOST
-            value: authentik-db-rw
-          - name: AUTHENTIK_POSTGRESQL__NAME
-            value: authentik
-          - name: AUTHENTIK_POSTGRESQL__USER
-            value: authentik
-          - name: AUTHENTIK_POSTGRESQL__PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: authentik-database-secret
-                key: password
-          - name: AUTHENTIK_SECRET_KEY
-            valueFrom:
-              secretKeyRef:
-                name: authentik-secret-key
-                key: secret-key
-      worker:
-        env: *authentik_env_vars
-      authentik:
+- name: authentik
+  namespace: authentik
+  releaseName: authentik
+  repo: https://charts.goauthentik.io
+  valuesInline:
+    authentik:
         # I think this setting is required
         # the secret gets set via env variable, see above
-        secret_key: ""
-      postgresql:
-        enabled: false
-      redis:
-        enabled: true
-        master:
-          shareProcessNamespace: true
-          persistence:
-            size: 4Gi
+      secret_key: ""
+    postgresql:
+      enabled: false
+    redis:
+      enabled: true
+      master:
+        persistence:
+          size: 4Gi
+        shareProcessNamespace: true
+    server:
+      env:
+      - name: AUTHENTIK_POSTGRESQL__HOST
+        value: authentik-db-rw
+      - name: AUTHENTIK_POSTGRESQL__NAME
+        value: authentik
+      - name: AUTHENTIK_POSTGRESQL__USER
+        value: authentik
+      - name: AUTHENTIK_POSTGRESQL__PASSWORD
+        valueFrom:
+          secretKeyRef:
+            key: password
+            name: authentik-database-secret
+      - name: AUTHENTIK_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            key: secret-key
+            name: authentik-secret-key
+    worker:
+      env:
+      - name: AUTHENTIK_POSTGRESQL__HOST
+        value: authentik-db-rw
+      - name: AUTHENTIK_POSTGRESQL__NAME
+        value: authentik
+      - name: AUTHENTIK_POSTGRESQL__USER
+        value: authentik
+      - name: AUTHENTIK_POSTGRESQL__PASSWORD
+        valueFrom:
+          secretKeyRef:
+            key: password
+            name: authentik-database-secret
+      - name: AUTHENTIK_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            key: secret-key
+            name: authentik-secret-key
+  version: 2025.12.3

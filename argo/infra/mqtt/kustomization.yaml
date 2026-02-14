@@ -1,29 +1,28 @@
----
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 labels:
-  - pairs:
-      environment: homelab
-  - includeSelectors: true
-    pairs:
-      app: mosquitto
+- pairs:
+    environment: homelab
+- includeSelectors: true
+  pairs:
+    app: mosquitto
 
 resources:
-  - deployment.yaml
-  - service.yaml
-  - pvc.yaml
-  - sealed-secrets/
+- deployment.yaml
+- service.yaml
+- pvc.yaml
+- sealed-secrets/mqtt-mosquitto-passwords-sealed.yaml
 
 images:
-  - name: mosquitto
-    newName: eclipse-mosquitto
-    newTag: 2.0.22
+- name: mosquitto
+  newName: eclipse-mosquitto
+  newTag: 2.0.22
 
 generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
-  - name: mosquitto-config
-    files:
-      - mosquitto.conf=mosquitto.conf
+- files:
+  - mosquitto.conf=mosquitto.conf
+  name: mosquitto-config

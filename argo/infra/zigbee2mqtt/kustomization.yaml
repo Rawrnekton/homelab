@@ -63,7 +63,7 @@ helmCharts:
   version: 2.7.1
 
 resources:
-- sealed-secrets/
+- sealed-secrets/zigbee2mqtt-zigbee2mqtt-secrets-sealed.yaml
 
 patches:
 - path: patch-sts-env-secrets.yaml
