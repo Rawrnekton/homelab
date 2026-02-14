@@ -36,7 +36,7 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ApplyOutOfSyncOnly=true
-          #- FailOnSharedResource=true
+          - FailOnSharedResource=true
   ignoreApplicationDifferences:
     - jsonPointers:
       - /spec/syncPolicy
