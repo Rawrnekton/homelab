@@ -6,3 +6,10 @@ cluster-init: true
 {% endif %}
 token: {{ cluster_setup_k3s_token }}
 
+{% set labels = cluster_setup_node_labels | default([]) %}
+{% if labels | length > 0 %}
+node-label:
+{% for label in labels %}
+  - "{{ label }}"
+{% endfor %}
+{% endif %}
