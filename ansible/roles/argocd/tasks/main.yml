@@ -1,4 +1,0 @@
----
-- name: Install ArgoCD
-  ansible.builtin.include_tasks: install_argocd.yml
-  when: inventory_hostname == groups['argo'][0]
