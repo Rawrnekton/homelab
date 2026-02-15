@@ -53,9 +53,5 @@ cluster_setup_rancher_version: v2.9.2
 
 ### helm-charts
 
-helm_charts:
-  - name: "cnpg"
-    repo_url: "https://cloudnative-pg.github.io/charts"
-    release_name: "cloudnative-pg"
-    release_namespace: "cnpg-system"
+helm_charts: []
   # - name: longhorn has its own role
