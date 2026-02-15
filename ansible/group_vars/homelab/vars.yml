@@ -65,8 +65,3 @@ helm_charts:
     release_values:
       fullnameOverride: "sealed-secrets-controller"
   # - name: longhorn has its own role
-
-### argocd
-
-argocd_authentik_oauth_client_id: "{{ vault_argocd_authentik_oauth_client_id }}"
-argocd_authentik_oauth_client_secret: "{{ vault_argocd_authentik_oauth_client_secret }}"
