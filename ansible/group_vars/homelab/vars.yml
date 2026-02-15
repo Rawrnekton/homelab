@@ -58,10 +58,4 @@ helm_charts:
     repo_url: "https://cloudnative-pg.github.io/charts"
     release_name: "cloudnative-pg"
     release_namespace: "cnpg-system"
-  - name: "sealed-secrets"
-    repo_url: "https://bitnami-labs.github.io/sealed-secrets"
-    release_name: "sealed-secrets"
-    release_namespace: "kube-system"
-    release_values:
-      fullnameOverride: "sealed-secrets-controller"
   # - name: longhorn has its own role
