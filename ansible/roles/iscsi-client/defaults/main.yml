@@ -1,0 +1,29 @@
+---
+# defaults file for iscsi-client
+iscsi_client_targets:
+  - name: my_portal
+    portal: 10.0.0.10 # if this is an fqdn, rest assured this will also work
+    port: 1234 # defaults to 3260 if omitted
+    targets:
+      - human_readable_name: opqrstuvwxyz
+        name: iqn.2013-12.com.abc:defghijklmn:opqrstuvwxyz
+        user: foo
+        password: bar
+        mountpoint: /foo/
+        fstype: ext4 # defaults to ext4 if omitted
+      - human_readable_name: opqrstuvwxyz2
+        name: iqn.2013-12.com.abc:defghijklmn:opqrstuvwxyz2
+        user: foo
+        password: bar
+        mountpoint: /bar/
+        fstype: ext4 # defaults to ext4 if omitted
+  - name: another_portal
+    portal: 10.0.0.11 # if this is an fqdn, rest assured this will also work
+    port: 5678 # defaults to 3260 if omitted
+    targets:
+      - human_readable_name: faa
+        name: iqn.2013-12.com.abc:defghijklmn:opqrstuvwxyz2
+        user: foz
+        password: baz
+        mountpoint: /baz/
+        fstype: ext4 # defaults to ext4 if omitted
