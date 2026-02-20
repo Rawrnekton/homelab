@@ -1,0 +1,118 @@
+---
+# tasks file for iscsi-client
+
+# Why two ways to add stuff to an already existing dictionary?
+# so I can steal this depending on what I need later on
+- name: Resolve portal FQDNs and add portal_resolved attribute
+  ansible.builtin.set_fact:
+    iscsi_client_targets: >-
+      {{
+        iscsi_client_targets | map('combine', {
+          'portal_ip': lookup('community.general.dig', item.portal)
+            if not (item.portal | ansible.utils.ipaddr)
+            else item.portal
+        }) | list
+      }}
+  loop: "{{ iscsi_client_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Add iscsi_dev path to each target
+  ansible.builtin.set_fact:
+    iscsi_client_targets: >-
+      {%- set result = [] -%}
+      {%- for portal in iscsi_client_targets -%}
+        {%- set targets = [] -%}
+        {%- for target in portal.targets -%}
+          {%- set dev = '/dev/disk/by-path/ip-' ~ portal.portal_ip ~ ':' ~ (portal.port | default(3260)) ~ '-iscsi-' ~ target.name ~ '-lun-0' -%}
+          {%- set _ = targets.append(target | combine({'iscsi_dev': dev})) -%}
+        {%- endfor -%}
+        {%- set _ = result.append(portal | combine({'targets': targets})) -%}
+      {%- endfor -%}
+      {{ result }}
+
+- name: Install iscsi initiator utilities
+  ansible.builtin.package:
+    name: open-iscsi
+    state: present
+
+- name: Ensure iscsid is running
+  ansible.builtin.service:
+    name: iscsid
+    state: started
+    enabled: true
+
+- name: Discover targets on portal
+  community.general.open_iscsi:
+    discover: true
+    portal: "{{ portal.portal }}"
+    port: "{{ portal.port | default(3260) }}"
+  loop: "{{ iscsi_client_targets }}"
+  loop_control:
+    loop_var: portal
+    label: "{{ portal.name }}"
+
+- name: iSCSI login for all targets on all portals
+  community.general.open_iscsi:
+    login: true
+    portal: "{{ portal.portal }}"
+    port: "{{ portal.port | default(3260) }}"
+    target: "{{ target.name }}"
+    node_auth: "{{ 'CHAP' if (target.user is defined and target.password is defined) else omit }}"
+    node_user: "{{ target.user | default(omit) }}"
+    node_pass: "{{ target.password | default(omit) }}"
+  loop: "{{ iscsi_client_targets | subelements('targets') }}"
+  loop_control:
+    label: "{{ portal.name }} -> {{ target.human_readable_name }} ({{ target.name }})"
+  vars:
+    portal: "{{ item.0 }}"
+    target: "{{ item.1 }}"
+
+- name: Wait for device nodes
+  ansible.builtin.wait_for:
+    path: "/dev/disk/by-path/ip-{{ portal.portal_ip }}:{{ portal.portal_port | default(3260) }}-iscsi-{{ target.name }}-lun-0"
+    state: present
+    timeout: 60
+  loop: "{{ iscsi_client_targets | subelements('targets') }}"
+  loop_control:
+    label: "{{ portal.portal }} -> {{ target.name }}"
+  vars:
+    portal: "{{ item.0 }}"
+    target: "{{ item.1 }}"
+
+- name: Create filesystem (unformatted LUN -> ext4)
+  community.general.filesystem:
+    fstype: "{{ target.fstype | default('ext4') }}"
+    dev: "{{ target.iscsi_dev }}"
+  loop: "{{ iscsi_client_targets | subelements('targets') }}"
+  loop_control:
+    label: "{{ portal.portal }} -> {{ target.name }}"
+  vars:
+    portal: "{{ item.0 }}"
+    target: "{{ item.1 }}"
+
+- name: Ensure mount point exists
+  ansible.builtin.file:
+    path: "{{ target.mountpoint }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ iscsi_client_targets | subelements('targets') }}"
+  loop_control:
+    label: "{{ portal.portal }} -> {{ target.name }}"
+  vars:
+    portal: "{{ item.0 }}"
+    target: "{{ item.1 }}"
+
+- name: Mount and persist in fstab (writable)
+  ansible.posix.mount:
+    path: "{{ target.mountpoint }}"
+    src: "{{ target.iscsi_dev }}"
+    fstype: "{{ target.iscsi_fstype | default('ext4') }}"
+    opts: "rw,_netdev"
+    state: mounted
+  loop: "{{ iscsi_client_targets | subelements('targets') }}"
+  loop_control:
+    label: "{{ portal.portal }} -> {{ target.name }}"
+  vars:
+    portal: "{{ item.0 }}"
+    target: "{{ item.1 }}"
