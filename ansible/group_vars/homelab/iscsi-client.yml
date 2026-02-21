@@ -1,0 +1,16 @@
+---
+# defaults file for iscsi-client
+iscsi_client_targets:
+  - name: secretmemestash
+    portal: secretmemestash.cindergla.de
+    targets:
+      - human_readable_name: garage-data
+        name: iqn.2013-03.com.wdc:secretmemestash:garage-data
+        user: garage
+        password: "{{ vault_iscsi_client_garage_password }}"
+        mountpoint: /var/lib/garage/data
+      - human_readable_name: garage-metadata-snapshot
+        name: iqn.2013-03.com.wdc:secretmemestash:garage-metadata-snapshot
+        user: garage
+        password: "{{ vault_iscsi_client_garage_password }}"
+        mountpoint: /var/lib/garage/snapshots
