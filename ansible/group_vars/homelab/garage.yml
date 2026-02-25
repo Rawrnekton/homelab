@@ -1,0 +1,29 @@
+---
+garage_version: "v2.2.0"
+garage_install_dir: "/usr/local/bin"
+
+garage_binary_architecture: "armv6l-unknown-linux-musleabihf"
+
+garage_metadata_dir: "/var/lib/garage/meta"
+garage_data_dir: "/var/lib/garage/data"
+garage_metadata_snapshot_dir: "/var/lib/garage/snapshots"
+
+
+garage_data_dir_size_in_GB: "1"
+garage_db_engine: "sqlite"
+garage_metadata_fsync: true
+
+garage_metadata_auto_snapshot_interval: "24h"
+
+# this is empty on purpose, set this as secret using `openssl rand -hex 32`
+garage_rpc_secret: "{{ vault_garage_rpc_secret }}"
+
+garage_s3_api_bind_addr: "127.0.0.1"
+garage_s3_api_bind_port: "3900"
+
+# S3 target config
+garage_s3_buckets:
+  - name: velero
+    bucket: velero
+    access_key_id: "{{ vault_garage_velero_access_key_id }}"
+    secret_key: "{{ vault_garage_velero_secret_key }}"
