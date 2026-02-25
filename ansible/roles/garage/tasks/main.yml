@@ -1,0 +1,137 @@
+---
+# tasks file for garage
+- name: Create garage system user
+  ansible.builtin.user:
+    name: garage
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ garage_data_dir }}"
+    create_home: false
+
+- name: Create garage directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: garage
+    group: garage
+    mode: '0750'
+  loop:
+    - "{{ garage_install_dir }}"
+    - "{{ garage_data_dir }}"
+    - "{{ garage_metadata_dir }}"
+    - "{{ garage_metadata_snapshot_dir }}"
+
+- name: Download garage binary
+  ansible.builtin.get_url:
+    url: "https://garagehq.deuxfleurs.fr/_releases/{{ garage_version }}/{{ garage_binary_architecture }}/garage"
+    dest: "{{ garage_install_dir }}/garage"
+    mode: '0755'
+
+- name: Deploy garage config
+  ansible.builtin.template:
+    src: garage.toml.j2
+    dest: /etc/garage.toml
+    mode: '0644'
+  notify: garage | Restart garage
+
+- name: Create systemd service
+  ansible.builtin.template:
+    src: garage.service.j2
+    dest: /etc/systemd/system/garage.service
+    mode: '0644'
+  notify: garage | Reload systemd
+
+- name: Enable and start garage service
+  ansible.builtin.systemd:
+    name: garage
+    enabled: true
+    state: started
+
+- name: Wait for garage to be ready
+  ansible.builtin.wait_for:
+    port: 3900
+    delay: 5
+    timeout: 30
+
+- name: Capture node id
+  ansible.builtin.command:
+    cmd: "garage node id"
+  register: _garage_node_id
+  changed_when: false
+
+- name: Set garage node ID fact
+  ansible.builtin.set_fact:
+    garage_node_id: "{{ _garage_node_id.stdout_lines[0] }}"
+
+# dont worry about the size (-c 1G),
+# this is arbitrary as this is ignored in a single node instance
+- name: stage cluster layout (never reports output)
+  ansible.builtin.command:
+    cmd: "garage layout assign -z garage -c 1G {{ garage_node_id }}"
+  changed_when: false
+
+- name: Get current cluster layout
+  ansible.builtin.command:
+    cmd: garage json-api GetClusterLayout
+  register: _layout_raw
+  changed_when: false
+
+- name: Parse layout JSON
+  ansible.builtin.set_fact:
+    garage_layout: "{{ _layout_raw.stdout | from_json }}"
+
+# this only runs if a change could be applied, thus always changed
+- name: Apply layout
+  ansible.builtin.command:
+    cmd: "garage layout apply --version {{ garage_layout.version | int + 1 }}"
+  when: garage_layout.stagedRoleChanges | length > 0
+  changed_when: true
+
+- name: Get existing buckets
+  ansible.builtin.command:
+    cmd: garage json-api ListBuckets
+  register: _garage_buckets_raw
+  changed_when: false
+
+- name: Create S3 buckets
+  ansible.builtin.command:
+    cmd: "garage bucket create {{ bucket.bucket }}"
+  changed_when: true
+  loop: "{{ garage_s3_buckets }}"
+  loop_control:
+    loop_var: bucket
+    label: "{{ bucket.bucket }}"
+  when: >-
+    (_garage_buckets_raw.stdout | from_json)
+    | selectattr('globalAliases', 'contains', bucket.bucket)
+    | list | length == 0
+
+- name: List existing keys
+  ansible.builtin.command:
+    cmd: garage json-api ListKeys
+  register: _garage_keys_raw
+  changed_when: false
+
+- name: Import S3 key if it does not exist
+  ansible.builtin.command:
+    cmd: >-
+      garage json-api ImportKey
+      '{{ {"accessKeyId": key.access_key_id, "secretAccessKey": key.secret_key, "name": key.name} | to_json }}'
+  changed_when: true
+  loop: "{{ garage_s3_buckets }}"
+  loop_control:
+    loop_var: key
+    label: "{{ key.name }}"
+  when: >-
+    (_garage_keys_raw.stdout | from_json)
+    | selectattr('id', 'equalto', key.access_key_id)
+    | list | length == 0
+
+- name: Grant key access to bucket
+  ansible.builtin.command:
+    cmd: "garage bucket allow --read --write --owner {{ bucket.bucket }} --key {{ bucket.access_key_id }}"
+  changed_when: false # i am too lazy rn to check this properly
+  loop: "{{ garage_s3_buckets }}"
+  loop_control:
+    loop_var: bucket
+    label: "{{ bucket.name }}"

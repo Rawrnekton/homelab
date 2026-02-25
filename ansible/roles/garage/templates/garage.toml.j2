@@ -1,0 +1,79 @@
+# documentation: https://garagehq.deuxfleurs.fr/documentation/reference-manual/configuration/
+# everything that is commented out is default
+# everything that is commented in but does not correspond to a configurable value is because
+# this is meant ONLY for a single node operation and will not need configuring in this scenario
+
+replication_factor = 1
+consistency_mode = "consistent"
+
+metadata_dir = "{{ garage_metadata_dir }}"
+data_dir = "{{ garage_data_dir }}"
+metadata_snapshots_dir = "{{ garage_metadata_snapshot_dir }}"
+metadata_fsync = {{ garage_metadata_fsync | bool | lower }}
+#data_fsync = false
+#disable_scrub = false
+#use_local_tz = false
+metadata_auto_snapshot_interval = "{{ garage_metadata_auto_snapshot_interval }}"
+
+db_engine = "{{ garage_db_engine }}"
+
+#block_size = "1M"
+#block_ram_buffer_max = "256MiB"
+#block_max_concurrent_reads = 16 # documentation does not mention the default
+#block_max_concurrent_writes_per_request = 3
+#lmdb_map_size = "1T" # If not specified, it defaults to 1GiB on 32-bit machines and 1TiB on 64-bit machines
+
+#compression_level = 1
+
+rpc_secret = "{{ garage_rpc_secret }}"
+#rpc_bind_addr = "[::]:3901"
+rpc_bind_addr = "127.0.0.1:3901"
+#rpc_bind_outgoing = false
+#rpc_public_addr = "[fc00:1::1]:3901"
+# or set rpc_public_adr_subnet to filter down autodiscovery to a subnet:
+# rpc_public_addr_subnet = "2001:0db8:f00:b00:/64"
+
+#allow_world_readable_secrets = false
+
+#bootstrap_peers = []
+
+#allow_punycode = false
+
+#[consul_discovery]
+#consul_http_addr = "https://127.0.0.1:8500"
+#api = "catalog"
+#tls_skip_verify = false
+#service_name = "garage-daemon"
+
+#ca_cert = "/etc/consul/consul-ca.crt"
+#client_cert = "/etc/consul/consul-client.crt"
+#client_key = "/etc/consul/consul-key.crt"
+
+# for `agent` API mode, unset client_cert and client_key, and optionally enable `token`
+# token = "abcdef-01234-56789"
+
+#tags = [ "dns-enabled" ]
+#meta = { dns-acl = "allow trusted" }
+#datacenters = ["dc1", "dc2", "dc3"]
+
+#[kubernetes_discovery]
+#namespace = "garage"
+#service_name = "garage-daemon"
+#skip_crd = false
+
+[s3_api]
+api_bind_addr = "{{ garage_s3_api_bind_addr }}:{{ garage_s3_api_bind_port }}"
+s3_region = "garage"
+#root_domain = ".s3.garage"
+
+#[s3_web]
+#bind_addr = "[::]:3902"
+#root_domain = ".web.garage"
+#add_host_to_metrics = true
+
+#[admin]
+#api_bind_addr = "0.0.0.0:3903"
+#metrics_token = "BCAdFjoa9G0KJR0WXnHHm7fs1ZAbfpI8iIZ+Z/a2NgI="
+#metrics_require_token = true
+#admin_token = "UkLeGWEvHnXBqnueR3ISEMWpOnm40jH2tM2HnnL/0F4="
+#trace_sink = "http://localhost:4317"
