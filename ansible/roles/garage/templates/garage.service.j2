@@ -1,0 +1,28 @@
+[Unit]
+Description=Garage Data Store
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=garage
+Group=garage
+
+Environment='RUST_LOG=garage=info' 'RUST_BACKTRACE=1'
+ExecStart={{ garage_install_dir }}/garage server
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=on-failure
+RestartSec=5s
+
+ProtectHome=true
+ProtectSystem=full
+NoNewPrivileges=true
+PrivateTmp=true
+LimitNOFILE=42000
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=garage
+
+[Install]
+WantedBy=multi-user.target

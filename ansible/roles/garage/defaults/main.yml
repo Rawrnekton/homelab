@@ -1,0 +1,37 @@
+---
+garage_version: "v2.2.0"
+garage_install_dir: "/usr/local/bin"
+
+garage_binary_architecture: "x86_64-unknown-linux-musl"
+# aarch64-unknown-linux-musl
+# armv6l-unknown-linux-musleabihf
+# i686-unknown-linux-musl
+# x86_64-unknown-linux-musl
+
+garage_metadata_dir: "/var/lib/garage/meta"
+garage_data_dir: "/var/lib/garage/data"
+# if left empty, no snapshots will be created
+garage_metadata_snapshot_dir: ""
+# you sadly can't specify when this will start directly
+# when this fires is dependent on when the service is started
+garage_metadata_auto_snapshot_interval: "6h"
+garage_metadata_fsync: "false"
+
+garage_db_engine: "lmdb" # use sqlite if power outages are a thing
+
+garage_rpc_secret: "" # this is empty on purpose, generate a new secret using `openssl rand -hex 32`, keep this in vault
+
+garage_s3_api_bind_addr: "[::]"
+garage_s3_api_bind_port: "3900"
+
+## S3 target config
+# this is designed for 1:1 key:bucket relation only
+garage_s3_buckets:
+  - name: foo
+    bucket: bucket_name_foo
+    access_key_id: "" # generate using `echo "gk$(openssl rand -hex 12)"`
+    secret_key: "" # generate using `openssl rand -hex 32`, keep this in vault
+  - name: bar
+    bucket: bucket_name_bar
+    access_key_id: "" # generate using `echo "gk$(openssl rand -hex 12)"`
+    secret_key: "" # generate using `openssl rand -hex 32`, keep this in vault
