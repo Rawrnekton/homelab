@@ -39,29 +39,51 @@ frontend https-in
 
     option forwardfor
     http-request set-header X-Real-IP          %[src]
-    http-request set-header X-Forwarded-Proto https
-    http-request set-header X-Forwarded-Host  %[req.hdr(Host)]
-    http-request set-header X-Forwarded-Port  443
+    http-request set-header X-Forwarded-Proto  https
+    http-request set-header X-Forwarded-Host   %[req.hdr(Host)]
+    http-request set-header X-Forwarded-Port   443
 
-    use_backend backend_hosts
-
-backend backend_hosts
-    mode http
-{% for server in groups['argo'] %}
-    server {{ server }} {{ hostvars[server]['ansible_default_ipv4']['address'] }}:443 ssl verify none check
+{% for backend in haproxy_https_backends %}
+{% if not backend.is_default | default(false) %}
+{% for domain in backend.domains %}
+    acl host_{{ backend.name | regex_replace('[^a-zA-Z0-9]', '_') }}_{{ loop.index }} hdr(host) -i {{ domain }}.{{ haproxy_base_domain }}
+{% endfor %}
+{% for domain in backend.domains %}
+#      acl host_{{ backend.name | regex_replace('[^a-zA-Z0-9]', '_') }}_{{ loop.index }} hdr(host) -i {{ domain }}
+{% endfor %}
+{% for domain in backend.domains %}
+    use_backend backend_{{ backend.name }} if host_{{ backend.name | regex_replace('[^a-zA-Z0-9]', '_') }}_{{ loop.index }}
+{% endfor %}
+{% endif %}
 {% endfor %}
 
-{% for service in haproxy_additional_services %}
+{% for backend in haproxy_https_backends %}
+{% if backend.is_default | default(false) %}
+    default_backend backend_{{ backend.name }}
+{% endif %}
+{% endfor %}
+
+{% for backend in haproxy_https_backends %}
+backend backend_{{ backend.name }}
+    mode http
+{% for server in backend.servers %}
+    server {{ server | regex_replace('[^a-zA-Z0-9]', '-') }} {{ server }}:{{ backend.port }}{% if backend.ssl | default(false) %} ssl{% if not backend.ssl_verify | default(true) %} verify none{% endif %}{% endif %}{% if backend.health_check | default(false) %} check{% endif %}
+
+{% endfor %}
+
+{% endfor %}
+
+{% for service in haproxy_tcp_services %}
 frontend {{ service.name }}-in
-    bind *:{{ service.external_port }}
-    mode {{ service.mode }}
-    use_backend backend_{{ service.name }}
+    bind *:{{ service.listen_port }}
+    mode tcp
+    default_backend backend_{{ service.name }}
 
 backend backend_{{ service.name }}
-    mode {{ service.mode }}
-    option tcp-check
-{% for server in groups['argo'] %}
-    server {{ server }} {{ hostvars[server]['ansible_default_ipv4']['address'] }}:{{ service.internal_port }} {% if service.check_backend | default(false) %}check {% endif %}
+    mode tcp
+{% for server in service.servers %}
+    server {{ server | regex_replace('[^a-zA-Z0-9]', '-') }} {{ server }}:{{ service.backend_port }}{% if service.health_check | default(false) %} check{% endif %}
 
 {% endfor %}
+
 {% endfor %}

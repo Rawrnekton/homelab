@@ -1,20 +1,12 @@
 ---
 # tasks file for haproxy
+
 - name: Install HAProxy
   ansible.builtin.apt:
     name: haproxy
     state: present
 
-- name: Copy HAProxy configuration file
-  ansible.builtin.template:
-    src: haproxy.cfg.j2
-    dest: /etc/haproxy/haproxy.cfg
-    owner: root
-    group: root
-    mode: '0644'
-  notify: Restart HAProxy
-
-- name: Ensure secure directory exists with 0700 permissions
+- name: Ensure SSL directory exists
   ansible.builtin.file:
     path: /etc/haproxy/ssl/
     state: directory
@@ -22,52 +14,88 @@
     group: root
     mode: "0700"
 
-- name: Check if certificate file exists for each service
+# build a flat list of all domains that need certificates
+# use this if I ever want to go back to full fqdns in the service name
+# - name: Build list of all HTTPS domains
+#   ansible.builtin.set_fact:
+#     _haproxy_all_domains: >-
+#       {{ haproxy_https_backends | map(attribute='domains') | flatten | unique }}
+
+- name: Build list of all HTTPS domains
+  ansible.builtin.set_fact:
+    _haproxy_all_domains: >-
+      {{ haproxy_https_backends
+         | map(attribute='domains')
+         | flatten
+         | unique
+         | map('regex_replace', '$', '.' ~ haproxy_base_domain)
+         | list }}
+
+- name: Check if certificate file exists for each domain
   ansible.builtin.stat:
-    path: "/etc/haproxy/ssl/{{ item.name }}.pem"
-  loop: "{{ services }}"
-  register: cert_files
+    path: "/etc/haproxy/ssl/{{ item }}.pem"
+  loop: "{{ _haproxy_all_domains }}"
+  register: _cert_files
 
-- name: Generate an OpenSSL private key with the default values (4096 bits, RSA)
+- name: Generate private key for domains without a PEM
   community.crypto.openssl_privatekey:
-    path: "/etc/haproxy/ssl/{{ item.item.name }}.key"
+    path: "/etc/haproxy/ssl/{{ item.item }}.key"
   when: not item.stat.exists
-  loop: "{{ cert_files.results }}"
+  loop: "{{ _cert_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
 
-- name: Create certificate signing request (CSR) for self-signed certificate
+- name: Create CSR for domains without a PEM
   community.crypto.openssl_csr:
-    privatekey_path: "/etc/haproxy/ssl/{{ item.item.name }}.key"
-    common_name: "{{ item.item.name }}.cindergla.de"
+    privatekey_path: "/etc/haproxy/ssl/{{ item.item }}.key"
+    common_name: "{{ item.item }}"
     subject_alt_name:
-      - "DNS:{{ item.item.name }}.k8s.internal.cindergla.de"
-    path: "/etc/haproxy/ssl/{{ item.item.name }}.csr"
+      - "DNS:{{ item.item }}"
+    path: "/etc/haproxy/ssl/{{ item.item }}.csr"
   when: not item.stat.exists
-  loop: "{{ cert_files.results }}"
+  loop: "{{ _cert_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
 
-- name: Create self-signed staging certificate if no cert file is found
+- name: Create self-signed certificate for domains without a PEM
   community.crypto.x509_certificate:
-    path: "/etc/haproxy/ssl/{{ item.item.name }}.crt"
-    privatekey_path: "/etc/haproxy/ssl/{{ item.item.name }}.key"
-    csr_path: "/etc/haproxy/ssl/{{ item.item.name }}.csr"
+    path: "/etc/haproxy/ssl/{{ item.item }}.crt"
+    privatekey_path: "/etc/haproxy/ssl/{{ item.item }}.key"
+    csr_path: "/etc/haproxy/ssl/{{ item.item }}.csr"
     provider: selfsigned
   when: not item.stat.exists
-  loop: "{{ cert_files.results }}"
+  loop: "{{ _cert_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
 
-- name: Create the pem
+- name: Assemble PEM from key + cert
   ansible.builtin.shell: >
     cat
-    /etc/haproxy/ssl/{{ item.item.name }}.key
-    /etc/haproxy/ssl/{{ item.item.name }}.crt
-    > /etc/haproxy/ssl/{{ item.item.name }}.pem
+    /etc/haproxy/ssl/{{ item.item }}.key
+    /etc/haproxy/ssl/{{ item.item }}.crt
+    > /etc/haproxy/ssl/{{ item.item }}.pem
   args:
     executable: /bin/bash
   when: not item.stat.exists
   changed_when: true
-  loop: "{{ cert_files.results }}"
+  loop: "{{ _cert_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
   notify: Restart HAProxy
 
-# Cleanup
-- name: Find all *.crt, *.csr and *.key files in the directory
+- name: Set permissions on PEM files
+  ansible.builtin.file:
+    path: "/etc/haproxy/ssl/{{ item.item }}.pem"
+    owner: root
+    group: root
+    mode: "0600"
+  when: not item.stat.exists
+  loop: "{{ _cert_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# Cleanup intermediate files
+- name: Find intermediate cert files (crt, csr, key)
   ansible.builtin.find:
     paths: /etc/haproxy/ssl
     patterns:
@@ -75,10 +103,22 @@
       - "*.key"
       - "*.csr"
     recurse: false
-  register: files_to_delete
+  register: _files_to_delete
 
-- name: Delete all *.crt, *.csr and *.key files
+- name: Remove intermediate cert files
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
-  loop: "{{ files_to_delete.files }}"
+  loop: "{{ _files_to_delete.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: Deploy HAProxy configuration
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: '0644'
+    validate: haproxy -c -f %s
+  notify: Restart HAProxy
