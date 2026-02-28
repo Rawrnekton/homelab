@@ -1,7 +1,45 @@
 ---
-haproxy_additional_services:
+# defaults file for haproxy
+haproxy_base_domain: cindergla.de
+
+haproxy_https_backends:
+  - name: argo-cluster
+    servers:
+      - 192.168.2.171
+      - 192.168.2.172
+      - 192.168.2.173
+    port: 443
+    ssl: true
+    ssl_verify: false
+    health_check: true
+    is_default: true
+    domains:
+      - mealie
+      - fliederhof
+      - rancher
+      - homepage
+      - argocd
+      - auth
+      - todo
+      - memories
+      - whoami
+      - zigbee2mqtt
+
+  - name: garage
+    servers:
+      - 127.0.0.1
+    port: 3900
+    ssl: false
+    health_check: true
+    domains:
+      - garage
+
+haproxy_tcp_services:
   - name: mqtt
-    mode: tcp
-    check_backend: True
-    external_port: 1883
-    internal_port: 31883
+    listen_port: 1883
+    backend_port: 31883
+    health_check: true
+    servers:
+      - 192.168.2.171
+      - 192.168.2.172
+      - 192.168.2.173
