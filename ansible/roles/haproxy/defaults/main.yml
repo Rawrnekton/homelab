@@ -1,14 +1,42 @@
 ---
 # defaults file for haproxy
+haproxy_base_domain: example.com
 
-services:
-  - name: service_name_1
-  - name: service_name_2
+# HTTPS backends - all served behind the shared port 443 frontend
+# Exactly one backend must have is_default: true
+haproxy_https_backends:
+  - name: this_is_a_backend
+    servers:
+      - server1.example.de
+      - server2.example.de
+      - server3.example.de
+    port: 443
+    ssl: true
+    ssl_verify: false
+    health_check: true
+    is_default: true
+    domains:
+      - foo
+      - bar
+      - foobar
 
+  - name: this_is_another_backend
+    servers:
+      - 127.0.0.1
+    port: 1234
+    ssl: false
+    health_check: true
+    domains:
+      - foz
 
-haproxy_additional_services:
-  - name: service_name_3
-    mode: tcp | http
-    check_backend: True | False
-    external_port: 1234 # port to listen on
-    internal_port: 5678 # port to forward to
+# TCP services - each gets its own frontend on a dedicated port
+haproxy_tcp_services:
+  - name: tcp-service
+    listen_port: 1883
+    backend_port: 31883
+    health_check: true
+    servers:
+      - server1.example.de
+      - server2.example.de
+      - server3.example.de
+
