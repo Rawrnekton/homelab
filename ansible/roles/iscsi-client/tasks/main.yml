@@ -95,7 +95,7 @@
   ansible.builtin.file:
     path: "{{ target.mountpoint }}"
     state: directory
-    mode: "0755"
+    mode: "0750"
   loop: "{{ iscsi_client_targets | subelements('targets') }}"
   loop_control:
     label: "{{ portal.portal }} -> {{ target.name }}"
