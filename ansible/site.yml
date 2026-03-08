@@ -33,4 +33,3 @@
     - { role: lvm-setup, tags: [lvm] }
     - { role: cluster-setup, tags: [cluster] }
     - { role: longhorn, tags: [longhorn] }
-    - { role: helm-charts, tags: [helm] }

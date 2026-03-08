@@ -53,8 +53,3 @@ cluster_setup_rancher_replica_count: 1
 cluster_setup_rancher_bootstrap_password: >-
   "{{ vault_cluster_setup_rancher_bootstrap_password }}"
 cluster_setup_rancher_version: v2.9.2
-
-### helm-charts
-
-helm_charts: []
-  # - name: longhorn has its own role
