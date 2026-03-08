@@ -44,7 +44,7 @@
       "cat \$RENEWED_LINEAGE/privkey.pem \$RENEWED_LINEAGE/fullchain.pem
       > /etc/haproxy/ssl/\$(echo \$RENEWED_DOMAINS |
       awk '{print \$1}' |
-      awk -F . '{print \$1}').pem"
+      awk -F . '{print \$1}').cindergla.de.pem"
       >> /var/log/letsencrypt/letsencrypt.log
       && systemctl restart haproxy
     minute: "0"
