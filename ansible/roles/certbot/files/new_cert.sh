@@ -23,12 +23,12 @@ docker run --rm \
   --dns-netcup-credentials /root/.secrets/certbot/netcup.ini \
   --keep-until-expiring --non-interactive --expand \
   --server https://acme-v02.api.letsencrypt.org/directory \
-  --agree-tos --email "jonathangerdes1@aol.de" \
-  -d "$service_name.cindergla.de" -d "$service_name.k8s.internal.cindergla.de"
+  --agree-tos --email "letsencrypt@cindergla.de" \
+  -d "$service_name"
 
 # Zertifikat zusammenschieben
-cat /etc/letsencrypt/live/$service_name.cindergla.de/privkey.pem \
-  /etc/letsencrypt/live/$service_name.cindergla.de/fullchain.pem \
+cat /etc/letsencrypt/live/$service_name/privkey.pem \
+  /etc/letsencrypt/live/$service_name/fullchain.pem \
   > /etc/haproxy/ssl/$service_name.pem
 
 systemctl restart haproxy
