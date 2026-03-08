@@ -58,10 +58,12 @@
     cmd: "garage node id"
   register: _garage_node_id
   changed_when: false
+  check_mode: false
 
 - name: Set garage node ID fact
   ansible.builtin.set_fact:
     garage_node_id: "{{ _garage_node_id.stdout_lines[0] }}"
+  check_mode: false
 
 # dont worry about the size (-c 1G),
 # this is arbitrary as this is ignored in a single node instance
@@ -75,10 +77,12 @@
     cmd: garage json-api GetClusterLayout
   register: _layout_raw
   changed_when: false
+  check_mode: false
 
 - name: Parse layout JSON
   ansible.builtin.set_fact:
     garage_layout: "{{ _layout_raw.stdout | from_json }}"
+  check_mode: false
 
 # this only runs if a change could be applied, thus always changed
 - name: Apply layout
@@ -92,6 +96,7 @@
     cmd: garage json-api ListBuckets
   register: _garage_buckets_raw
   changed_when: false
+  check_mode: false
 
 - name: Create S3 buckets
   ansible.builtin.command:
@@ -111,6 +116,7 @@
     cmd: garage json-api ListKeys
   register: _garage_keys_raw
   changed_when: false
+  check_mode: false
 
 - name: Import S3 key if it does not exist
   ansible.builtin.command:
