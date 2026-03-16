@@ -30,6 +30,7 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true
   ignoreApplicationDifferences:
     - jsonPointers:
       - /spec/syncPolicy
