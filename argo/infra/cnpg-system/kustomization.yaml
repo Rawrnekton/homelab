@@ -14,3 +14,6 @@ resources:
   - https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.11.0/manifest.yaml
   - cnpg-garage-credentials-sealed.yaml
   - object-store-cr.yaml
+
+patches:
+  - path: barman-certificates-patch.yaml
