@@ -4,6 +4,8 @@ kind: Kustomization
 
 resources:
   - velero-credentials-sealed.yaml
+  - backup-daily.yaml
+  - backup-sealed-secret-keys.yaml
 
 helmCharts:
   - name: velero
