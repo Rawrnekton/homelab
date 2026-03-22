@@ -15,10 +15,13 @@ resources:
 - deployment.yaml
 - service.yaml
 - ingress.yaml
+- cnpg-object-store.yaml
+- cnpg-scheduled-backup.yaml
 - sealed-secrets/planka-planka-authentik-oidc-credentials-sealed.yaml
 - sealed-secrets/planka-planka-database-secret-sealed.yaml
 - sealed-secrets/planka-planka-secret-sealed.yaml
 - sealed-secrets/planka-planka-smtp-sealed.yaml
+- cnpg-garage-credentials-sealed-clusterwide.yaml
 
 images:
 - name: planka
