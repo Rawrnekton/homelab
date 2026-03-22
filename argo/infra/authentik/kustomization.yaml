@@ -12,8 +12,11 @@ labels:
 resources:
 - database.yml
 - ingress.yml
+- cnpg-object-store.yaml
+- cnpg-scheduled-backup.yaml
 - sealed-secrets/authentik-authentik-database-secret-sealed.yaml
 - sealed-secrets/authentik-authentik-secret-key-sealed.yaml
+- cnpg-garage-credentials-sealed-clusterwide.yaml
 
 helmCharts:
 - name: authentik
