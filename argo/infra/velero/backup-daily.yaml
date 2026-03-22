@@ -12,4 +12,5 @@ spec:
     defaultVolumesToFsBackup: false
     includedNamespaces:
       - minecraft
+      - home-assistant
       - mqtt
