@@ -16,6 +16,8 @@ spec:
     metadata:
       labels:
         app: mosquitto
+      annotations:
+        backup.velero.io/backup-volumes: data
     spec:
       initContainers:
         - name: init-mosquitto-config
