@@ -16,3 +16,4 @@ spec:
       - mealie
       - planka
       - mqtt
+      - zigbee2mqtt
