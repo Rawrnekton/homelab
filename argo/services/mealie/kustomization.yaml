@@ -15,9 +15,12 @@ resources:
 - deployment.yaml
 - service.yaml
 - ingress.yaml
+- cnpg-object-store.yaml
+- cnpg-scheduled-backup.yaml
 - sealed-secrets/mealie-mealie-authentik-oidc-credentials-sealed.yaml
 - sealed-secrets/mealie-mealie-database-secret-sealed.yaml
 - sealed-secrets/mealie-mealie-smtp-sealed.yaml
+- cnpg-garage-credentials-sealed-clusterwide.yaml
 
 images:
 - name: mealie
