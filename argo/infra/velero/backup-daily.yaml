@@ -13,4 +13,5 @@ spec:
     includedNamespaces:
       - minecraft
       - home-assistant
+      - mealie
       - mqtt
