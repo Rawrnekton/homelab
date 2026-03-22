@@ -12,3 +12,4 @@ spec:
     defaultVolumesToFsBackup: false
     includedNamespaces:
       - minecraft
+      - mqtt
