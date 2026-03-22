@@ -8,6 +8,9 @@ spec:
   strategy:
     type: Recreate
   template:
+    metadata:
+      annotations:
+        backup.velero.io/backup-volumes: planka-favicons,planka-user-avatars,planka-background-images,planka-attachments
     spec:
       containers:
         - name: planka
