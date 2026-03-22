@@ -67,3 +67,4 @@ resources:
 
 patches:
 - path: patch-sts-env-secrets.yaml
+- path: patch-sts-velero.yaml
