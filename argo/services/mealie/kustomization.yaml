@@ -20,7 +20,7 @@ resources:
 - sealed-secrets/mealie-mealie-authentik-oidc-credentials-sealed.yaml
 - sealed-secrets/mealie-mealie-database-secret-sealed.yaml
 - sealed-secrets/mealie-mealie-smtp-sealed.yaml
-- cnpg-garage-credentials-sealed-clusterwide.yaml
+- cnpg-garage-credentials-sealed.yaml
 
 images:
 - name: mealie
