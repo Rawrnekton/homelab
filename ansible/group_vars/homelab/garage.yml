@@ -25,8 +25,8 @@ garage_s3_api_bind_port: "3900"
 garage_s3_buckets:
   - name: velero-basebackup
     bucket: velero-basebackup
-    access_key_id: "{{ vault_garage_velero_access_key_id }}"
-    secret_key: "{{ vault_garage_velero_secret_key }}"
+    access_key_id: "{{ vault_garage_velero_basebackup_access_key_id }}"
+    secret_key: "{{ vault_garage_velero_basebackup_secret_key }}"
   - name: cnpg-authentik
     bucket: cnpg-authentik
     access_key_id: "{{ vault_garage_cnpg_authentik_access_key_id }}"
