@@ -5,7 +5,7 @@ metadata:
   name: garage
 spec:
   configuration:
-    destinationPath: s3://velero/
+    destinationPath: s3://cnpg-immich/
     endpointURL: https://garage.cindergla.de
     s3Credentials:
       accessKeyId:
