@@ -16,7 +16,7 @@ resources:
 - cnpg-object-store.yaml
 - cnpg-scheduled-backup.yaml
 - sealed-secrets/immich-immich-database-secret-sealed.yaml
-- cnpg-garage-credentials-sealed-clusterwide.yaml
+- cnpg-garage-credentials-sealed.yaml
 
 helmCharts:
 - name: immich
