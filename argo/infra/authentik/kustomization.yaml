@@ -16,7 +16,7 @@ resources:
 - cnpg-scheduled-backup.yaml
 - sealed-secrets/authentik-authentik-database-secret-sealed.yaml
 - sealed-secrets/authentik-authentik-secret-key-sealed.yaml
-- cnpg-garage-credentials-sealed-clusterwide.yaml
+- cnpg-garage-credentials-sealed.yaml
 
 helmCharts:
 - name: authentik
