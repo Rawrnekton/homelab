@@ -21,7 +21,7 @@ resources:
 - sealed-secrets/planka-planka-database-secret-sealed.yaml
 - sealed-secrets/planka-planka-secret-sealed.yaml
 - sealed-secrets/planka-planka-smtp-sealed.yaml
-- cnpg-garage-credentials-sealed-clusterwide.yaml
+- cnpg-garage-credentials-sealed.yaml
 
 images:
 - name: planka
