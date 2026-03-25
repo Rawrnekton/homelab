@@ -23,7 +23,23 @@ garage_s3_api_bind_port: "3900"
 
 # S3 target config
 garage_s3_buckets:
-  - name: velero
-    bucket: velero
+  - name: velero-basebackup
+    bucket: velero-basebackup
     access_key_id: "{{ vault_garage_velero_access_key_id }}"
     secret_key: "{{ vault_garage_velero_secret_key }}"
+  - name: cnpg-authentik
+    bucket: cnpg-authentik
+    access_key_id: "{{ vault_garage_cnpg_authentik_access_key_id }}"
+    secret_key: "{{ vault_garage_cnpg_authentik_secret_key }}"
+  - name: cnpg-immich
+    bucket: cnpg-immich
+    access_key_id: "{{ vault_garage_cnpg_immich_access_key_id }}"
+    secret_key: "{{ vault_garage_cnpg_immich_secret_key }}"
+  - name: cnpg-mealie
+    bucket: cnpg-mealie
+    access_key_id: "{{ vault_garage_cnpg_mealie_access_key_id }}"
+    secret_key: "{{ vault_garage_cnpg_mealie_secret_key }}"
+  - name: cnpg-planka
+    bucket: cnpg-planka
+    access_key_id: "{{ vault_garage_cnpg_planka_access_key_id }}"
+    secret_key: "{{ vault_garage_cnpg_planka_secret_key }}"
