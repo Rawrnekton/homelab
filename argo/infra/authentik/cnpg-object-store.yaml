@@ -13,4 +13,4 @@ spec:
         key: ACCESS_KEY_ID
       secretAccessKey:
         name: cnpg-garage-credentials
-        key: ACCESS_SECRET_KEY
+        key: SECRET_ACCESS_KEY
