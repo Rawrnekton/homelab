@@ -1,0 +1,33 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: copperforge
+spec:
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        backup.velero.io/backup-volumes: copperforge-data
+    spec:
+      containers:
+        - name: copperforge
+          image: copperforge
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: copperforge-admin-token-secret
+                  key: ADMIN_TOKEN
+          volumeMounts:
+            - name: copperforge-data
+              mountPath: /data
+      imagePullSecrets:
+        - name: copperforge-ghcr-pull-secret
+      volumes:
+        - name: copperforge-data
+          persistentVolumeClaim:
+            claimName: copperforge-data

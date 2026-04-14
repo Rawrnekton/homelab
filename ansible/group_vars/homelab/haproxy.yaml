@@ -24,6 +24,7 @@ haproxy_https_backends:
       - memories
       - whoami
       - zigbee2mqtt
+      - copperforge
 
   - name: garage
     servers:

@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: copperforge
+
+labels:
+- pairs:
+    environment: homelab
+- includeSelectors: true
+  pairs:
+    app: copperforge
+
+resources:
+- copperforge-ghcr-pull-secret-sealed.yaml
+- copperforge-admin-token-secret-sealed.yaml
+- deployment.yaml
+- ingress.yaml
+- pvc.yaml
+- service.yaml
+
+images:
+- name: copperforge
+  newName: ghcr.io/rawrnekton/copperforge
+  newTag: 0.1.0
