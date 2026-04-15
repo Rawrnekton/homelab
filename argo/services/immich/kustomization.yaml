@@ -29,7 +29,7 @@ helmCharts:
         containers:
           main:
             image:
-              tag: v2.7.4
+              tag: v2.7.5
     immich:
       persistence:
         library:
