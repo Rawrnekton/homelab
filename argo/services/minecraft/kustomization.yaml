@@ -17,4 +17,4 @@ labels:
 
 images:
   - name: itzg/minecraft-server
-    newTag: latest
+    newTag: stable
