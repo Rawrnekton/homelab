@@ -7,7 +7,17 @@
     "ansible/**"
   ],
   "enabledManagers": [
-    "kustomize"
+    "kustomize",
+    "regex"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)kustomization\\.ya?ml$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)\\s+tag:\\s*(?<currentValue>[^\\s]+)"
+      ]
+    }
   ],
   "packageRules": [
     {
