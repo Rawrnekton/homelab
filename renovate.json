@@ -2,5 +2,30 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "ignorePaths": [
+    "ansible/**"
+  ],
+  "enabledManagers": [
+    "kustomize"
+  ],
+  "packageRules": [
+    {
+      "description": "Require manual review for infrastructure updates",
+      "matchFileNames": ["argo/infra/**"],
+      "automerge": false
+    },
+    {
+      "description": "Auto-merge service updates after checks pass",
+      "matchFileNames": ["argo/services/**"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Disable updates for Minecraft - manually managed",
+      "matchPackageNames": ["itzg/minecraft-server"],
+      "enabled": false
+    }
   ]
 }
