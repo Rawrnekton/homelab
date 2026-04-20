@@ -59,4 +59,4 @@ helmCharts:
           strategy: Recreate
     valkey:
       enabled: true
-  version: 0.10.3
+  version: 0.11.1
