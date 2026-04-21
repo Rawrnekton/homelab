@@ -8,12 +8,14 @@
   ],
   "enabledManagers": [
     "kustomize",
-    "regex"
+    "custom.regex"
   ],
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["(^|/)kustomization\\.ya?ml$"],
+      "managerFilePatterns": [
+        "/(^|/)kustomization\\.ya?ml$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)\\s+tag:\\s*(?<currentValue>[^\\s]+)"
       ]
