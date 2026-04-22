@@ -27,6 +27,9 @@ services:
     - name: copperforge
       dns_target: "{{ internal_ip_gateway }}"
       is_external: true
+    - name: vorleser
+      dns_target: "{{ internal_ip_gateway }}"
+      is_external: true
     - name: fliederhof
       dns_target: "{{ internal_ip_gateway }}"
       is_external: false
