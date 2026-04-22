@@ -10,11 +10,3 @@ spec:
     ttl: 168h  # 7 tage
     snapshotVolumes: false
     defaultVolumesToFsBackup: false
-    includedNamespaces:
-      - minecraft
-      - home-assistant
-      - mealie
-      - planka
-      - mqtt
-      - zigbee2mqtt
-      - copperforge
