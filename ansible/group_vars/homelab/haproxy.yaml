@@ -25,6 +25,7 @@ haproxy_https_backends:
       - whoami
       - zigbee2mqtt
       - copperforge
+      - vorleser
 
   - name: garage
     servers:

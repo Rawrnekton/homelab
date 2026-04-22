@@ -1,0 +1,39 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audiobookshelf
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        backup.velero.io/backup-volumes: audiobookshelf-data
+    spec:
+      containers:
+        - name: audiobookshelf
+          image: audiobookshelf
+          ports:
+            - containerPort: 80
+          env:
+            - name: TZ
+              value: "Europe/Berlin"
+          volumeMounts:
+            - name: audiobookshelf-data
+              mountPath: /config
+              subPath: config
+            - name: audiobookshelf-data
+              mountPath: /metadata
+              subPath: metadata
+            - name: audiobookshelf-data
+              mountPath: /audiobooks
+              subPath: audiobooks
+            - name: audiobookshelf-data
+              mountPath: /podcasts
+              subPath: podcasts
+      volumes:
+        - name: audiobookshelf-data
+          persistentVolumeClaim:
+            claimName: audiobookshelf-data
