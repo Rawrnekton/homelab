@@ -14,5 +14,4 @@ spec:
       secretAccessKey:
         name: cnpg-garage-credentials
         key: SECRET_ACCESS_KEY
-    data:
-      retentionPolicy: "30d"
+    retentionPolicy: "30d"
