@@ -18,4 +18,4 @@ resources:
 images:
 - name: audiobookshelf
   newName: ghcr.io/advplyr/audiobookshelf
-  newTag: 2.33.2
+  newTag: 2.34.0
