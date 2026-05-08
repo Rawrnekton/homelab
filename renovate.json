@@ -31,8 +31,8 @@
       "description": "Auto-merge service updates after checks pass",
       "matchFileNames": ["argo/services/**"],
       "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true
+      "automergeType": "branch",
+      "platformAutomerge": false
     },
     {
       "description": "Disable updates for Minecraft - manually managed",
