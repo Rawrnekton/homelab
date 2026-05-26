@@ -5,7 +5,7 @@ metadata:
   name: planka-db
   namespace: planka
 spec:
-  instances: 1
+  instances: 2
   bootstrap:
     initdb:
       database: planka
