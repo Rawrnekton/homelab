@@ -40,8 +40,8 @@ jobs:
           fi
           rc=0
           for d in "${dirs[@]}"; do
-            echo "::group::kustomize build $d"
-            kustomize build "$d" >/dev/null || { echo "::error::kustomize build failed in $d"; rc=1; }
+            echo "::group::kustomize build --enable-helm $d"
+            kustomize build --enable-helm "$d" >/dev/null || { echo "::error::kustomize build failed in $d"; rc=1; }
             echo "::endgroup::"
           done
           exit $rc
