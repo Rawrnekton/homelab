@@ -33,7 +33,7 @@ helmCharts:
           g, argocd Admin, role:admin
       params:
         server.insecure: "true"
-  version: 9.5.17
+  version: 9.5.19
   includeCRDs: true
 
 resources:
