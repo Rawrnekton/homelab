@@ -32,7 +32,7 @@ helmCharts:
             bucket: velero-basebackup
             default: true
             config:
-              region: garage
+              region: us-east-1
               s3Url: https://garage.cindergla.de
               s3ForcePathStyle: "true"
         volumeSnapshotLocation: []
