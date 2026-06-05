@@ -13,7 +13,7 @@ spec:
       secret:
         name: authentik-database-secret
   storage:
-    size: 7Gi
+    size: 15Gi
     storageClass: longhorn-r1
   plugins:
   - name: barman-cloud.cloudnative-pg.io
