@@ -65,11 +65,13 @@
     name: open-iscsi
     enabled: true
 
-# sendtargets discovery has two destructive side effects i don't want:
+# sendtargets discovery has two destructive side effects this avoids:
 # it re-creates node records for every IQN the portal advertises (not just
-# the ones we configured) and it resets every existing node-config key back
-# to iscsid.conf defaults, which would wipe the CHAP password every run.
-# I know the exact (portal, target) pairs already, so I create them directly.
+# the ones that get configured) and, on every run, resets each record's keys back
+# to iscsid.conf defaults, which would wipe the CHAP password and
+# node.startup written by the login task below. The exact(portal, target) pairs
+# are already know, so the records are created directly here
+# let community.general.open_iscsi persist auth + node.startup on login.
 - name: Create iSCSI node record for each desired target
   ansible.builtin.command:
     cmd: >-
@@ -84,47 +86,16 @@
     portal: "{{ item.0 }}"
     target: "{{ item.1 }}"
 
-# Persist node-config keys (startup + CHAP creds) directly to the on-disk
-# node record. I do this *before* login because:
-# - On a fresh node record (just created with -o new), the default config has
-#   no CHAP creds, so login would fail without these writes.
-# - `community.general.open_iscsi`'s --op=update for the CHAP password
-#   doesn't persist on this distro, so we can't rely on the login module to
-#   set it for us either.
-- name: Persist iSCSI node config (startup + CHAP credentials)
-  ansible.builtin.lineinfile:
-    path: "{{ item.path }}"
-    regexp: "^{{ item.key }}\\s*="
-    line: "{{ item.key }} = {{ item.value }}"
-    state: present
-    create: false
-  loop: "{{ _iscsi_node_config_entries }}"
-  loop_control:
-    label: "{{ item.label }} :: {{ item.key }}"
-  no_log: true
-  vars:
-    _iscsi_node_config_entries: >-
-      {%- set entries = [] -%}
-      {%- for portal in iscsi_client_targets -%}
-        {%- for target in portal.targets -%}
-          {%- set base = '/etc/iscsi/nodes/' ~ target.name ~ '/' ~ portal.portal_ip ~ ',' ~ (portal.port | default(3260)) ~ ',1/default' -%}
-          {%- set label = portal.name ~ ' -> ' ~ target.human_readable_name -%}
-          {%- set _ = entries.append({'path': base, 'key': 'node.startup', 'value': 'automatic', 'label': label}) -%}
-          {%- if target.user is defined and target.password is defined -%}
-            {%- set _ = entries.append({'path': base, 'key': 'node.session.auth.authmethod', 'value': 'CHAP', 'label': label}) -%}
-            {%- set _ = entries.append({'path': base, 'key': 'node.session.auth.username',  'value': target.user, 'label': label}) -%}
-            {%- set _ = entries.append({'path': base, 'key': 'node.session.auth.password',  'value': target.password, 'label': label}) -%}
-          {%- endif -%}
-        {%- endfor -%}
-      {%- endfor -%}
-      {{ entries }}
-
-- name: iSCSI login for all targets on all portals
+- name: ISCSI login for all targets on all portals
   community.general.open_iscsi:
     login: true
     portal: "{{ portal.portal }}"
     port: "{{ portal.port | default(3260) }}"
     target: "{{ target.name }}"
+    auto_node_startup: true
+    node_auth: "{{ 'CHAP' if (target.user is defined and target.password is defined) else omit }}"
+    node_user: "{{ target.user | default(omit) }}"
+    node_pass: "{{ target.password | default(omit) }}"
   loop: "{{ iscsi_client_targets | subelements('targets') }}"
   loop_control:
     label: "{{ portal.name }} -> {{ target.human_readable_name }} ({{ target.name }})"
