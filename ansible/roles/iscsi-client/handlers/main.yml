@@ -1,3 +1,8 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # handlers file for iscsi-client
+
+- name: Restart iscsid
+  ansible.builtin.service:
+    name: iscsid
+    state: restarted

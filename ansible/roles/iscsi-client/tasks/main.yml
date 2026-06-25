@@ -1,14 +1,32 @@
 ---
 # tasks file for iscsi-client
 
-# Why two ways to add stuff to an already existing dictionary?
-# so I can steal this depending on what I need later on
-- name: Resolve portal FQDNs and add portal_resolved attribute
+# First enriching every portal with portal_ip and every target with an `iscsi_dev` key
+# (the stable /dev/disk/by-pathdevice node) so later tasks (filesystem create, mount/fstab)
+# don't rebuild the path string themselves.
+#
+# Resulting shape of iscsi_client_targets:
+#   - name: <portal display name>
+#     portal: <portal FQDN or IP, as configured>
+#     # added by - name: Resolve portal FQDNs and add portal_ip attribute
+#     portal_ip: <resolved IP>
+#     port: <int, optional, default 3260>
+#     targets:
+#       - name: <target IQN>
+#         human_readable_name: <label>
+#         mountpoint: <path>
+#         user: <chap user, optional>
+#         password: <chap password, optional>
+#         fstype: <optional, default ext4>
+#         # added by - name: Add iscsi_dev path to each target
+#         iscsi_dev: /dev/disk/by-path/ip-<portal_ip>:<port>-iscsi-<IQN>-lun-0
+
+- name: Resolve portal FQDNs and add portal_ip attribute
   ansible.builtin.set_fact:
     iscsi_client_targets: >-
       {{
         iscsi_client_targets | map('combine', {
-          'portal_ip': lookup('community.general.dig', item.portal)
+          'portal_ip': lookup('community.general.dig', item.portal) | split(',') | first
             if not (item.portal | ansible.utils.ipaddr)
             else item.portal
         }) | list
@@ -42,15 +60,64 @@
     state: started
     enabled: true
 
-- name: Discover targets on portal
-  community.general.open_iscsi:
-    discover: true
-    portal: "{{ portal.portal }}"
-    port: "{{ portal.port | default(3260) }}"
-  loop: "{{ iscsi_client_targets }}"
+- name: Ensure open-iscsi boot-time login service is enabled
+  ansible.builtin.service:
+    name: open-iscsi
+    enabled: true
+
+# sendtargets discovery has two destructive side effects i don't want:
+# it re-creates node records for every IQN the portal advertises (not just
+# the ones we configured) and it resets every existing node-config key back
+# to iscsid.conf defaults, which would wipe the CHAP password every run.
+# I know the exact (portal, target) pairs already, so I create them directly.
+- name: Create iSCSI node record for each desired target
+  ansible.builtin.command:
+    cmd: >-
+      iscsiadm -m node -o new
+      -T {{ target.name }}
+      -p {{ portal.portal_ip }}:{{ portal.port | default(3260) }}
+    creates: "/etc/iscsi/nodes/{{ target.name }}/{{ portal.portal_ip }},{{ portal.port | default(3260) }},1/default"
+  loop: "{{ iscsi_client_targets | subelements('targets') }}"
   loop_control:
-    loop_var: portal
-    label: "{{ portal.name }}"
+    label: "{{ portal.name }} -> {{ target.human_readable_name }}"
+  vars:
+    portal: "{{ item.0 }}"
+    target: "{{ item.1 }}"
+
+# Persist node-config keys (startup + CHAP creds) directly to the on-disk
+# node record. I do this *before* login because:
+# - On a fresh node record (just created with -o new), the default config has
+#   no CHAP creds, so login would fail without these writes.
+# - `community.general.open_iscsi`'s --op=update for the CHAP password
+#   doesn't persist on this distro, so we can't rely on the login module to
+#   set it for us either.
+- name: Persist iSCSI node config (startup + CHAP credentials)
+  ansible.builtin.lineinfile:
+    path: "{{ item.path }}"
+    regexp: "^{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+    state: present
+    create: false
+  loop: "{{ _iscsi_node_config_entries }}"
+  loop_control:
+    label: "{{ item.label }} :: {{ item.key }}"
+  no_log: true
+  vars:
+    _iscsi_node_config_entries: >-
+      {%- set entries = [] -%}
+      {%- for portal in iscsi_client_targets -%}
+        {%- for target in portal.targets -%}
+          {%- set base = '/etc/iscsi/nodes/' ~ target.name ~ '/' ~ portal.portal_ip ~ ',' ~ (portal.port | default(3260)) ~ ',1/default' -%}
+          {%- set label = portal.name ~ ' -> ' ~ target.human_readable_name -%}
+          {%- set _ = entries.append({'path': base, 'key': 'node.startup', 'value': 'automatic', 'label': label}) -%}
+          {%- if target.user is defined and target.password is defined -%}
+            {%- set _ = entries.append({'path': base, 'key': 'node.session.auth.authmethod', 'value': 'CHAP', 'label': label}) -%}
+            {%- set _ = entries.append({'path': base, 'key': 'node.session.auth.username',  'value': target.user, 'label': label}) -%}
+            {%- set _ = entries.append({'path': base, 'key': 'node.session.auth.password',  'value': target.password, 'label': label}) -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ entries }}
 
 - name: iSCSI login for all targets on all portals
   community.general.open_iscsi:
@@ -58,9 +125,6 @@
     portal: "{{ portal.portal }}"
     port: "{{ portal.port | default(3260) }}"
     target: "{{ target.name }}"
-    node_auth: "{{ 'CHAP' if (target.user is defined and target.password is defined) else omit }}"
-    node_user: "{{ target.user | default(omit) }}"
-    node_pass: "{{ target.password | default(omit) }}"
   loop: "{{ iscsi_client_targets | subelements('targets') }}"
   loop_control:
     label: "{{ portal.name }} -> {{ target.human_readable_name }} ({{ target.name }})"
@@ -68,9 +132,15 @@
     portal: "{{ item.0 }}"
     target: "{{ item.1 }}"
 
+- name: Enumerate currently cached iSCSI node IQNs
+  ansible.builtin.command: iscsiadm -m node
+  register: iscsi_cached_nodes
+  changed_when: false
+  failed_when: iscsi_cached_nodes.rc not in [0, 21]
+
 - name: Wait for device nodes
   ansible.builtin.wait_for:
-    path: "/dev/disk/by-path/ip-{{ portal.portal_ip }}:{{ portal.portal_port | default(3260) }}-iscsi-{{ target.name }}-lun-0"
+    path: "{{ target.iscsi_dev }}"
     state: present
     timeout: 60
   loop: "{{ iscsi_client_targets | subelements('targets') }}"
@@ -107,8 +177,8 @@
   ansible.posix.mount:
     path: "{{ target.mountpoint }}"
     src: "{{ target.iscsi_dev }}"
-    fstype: "{{ target.iscsi_fstype | default('ext4') }}"
-    opts: "rw,_netdev"
+    fstype: "{{ target.fstype | default('ext4') }}"
+    opts: "rw,_netdev,nofail,x-systemd.requires=open-iscsi.service,x-systemd.device-timeout=30"
     state: mounted
   loop: "{{ iscsi_client_targets | subelements('targets') }}"
   loop_control:
