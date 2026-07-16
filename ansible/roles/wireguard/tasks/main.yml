@@ -9,7 +9,7 @@
 # TODO: change changed when
 - name: Generate wireguard priv key if not exists
   ansible.builtin.command: wg genkey
-  register: generated_private_key
+  register: wireguard_generated_private_key
   args:
     creates: "/etc/wireguard/private.key"
   changed_when: false
@@ -17,7 +17,7 @@
 # TODO: change when this actually runs depending on the output of the previous command
 - name: Write private key to file
   ansible.builtin.copy:
-    content: "{{ generated_private_key.stdout }}"
+    content: "{{ wireguard_generated_private_key.stdout }}"
     dest: "/etc/wireguard/private.key"
     owner: root
     group: root
@@ -57,14 +57,14 @@
       username: "{{ wireguard_ispconfig_username }}"
       password: "{{ wireguard_ispconfig_password }}"
     return_content: true
-  register: session_id_raw
+  register: wireguard_session_id_raw
   delegate_to: localhost
   run_once: true
   check_mode: false
 
 - name: Flatten variable to be more usable
   ansible.builtin.set_fact:
-    session_id: "{{ session_id_raw.json.response }}"
+    wireguard_session_id: "{{ wireguard_session_id_raw.json.response }}"
 
 - name: Create Vhost and proxy on VPS for each external service
   ansible.builtin.uri:
@@ -74,7 +74,7 @@
       Content-Type: "application/json"
     body_format: json
     body:
-      session_id: "{{ session_id }}"
+      session_id: "{{ wireguard_session_id }}"
       client_id: "0"
       params:
         server_id: "1"
