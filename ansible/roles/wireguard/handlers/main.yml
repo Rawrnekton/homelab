@@ -1,2 +1,6 @@
 ---
 # handlers file for wireguard
+- name: Reload wireguard configuration
+  ansible.builtin.shell: "wg syncconf wg0 <(wg-quick strip wg0)"
+  args:
+    executable: /bin/bash
