@@ -37,6 +37,15 @@
   changed_when: false
   check_mode: false
 
+- name: Enable IPv4 forwarding for WireGuard peer relaying (VPS only)
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+  when: inventory_hostname in groups['vps']
+
 - name: Create wireguard configuration
   ansible.builtin.template:
     src: wireguard.j2
@@ -45,6 +54,7 @@
     group: root
     mode: "0600"
     backup: true
+  notify: Reload wireguard configuration
 
 - name: Log into IspConfig and retrieve session_id
   ansible.builtin.uri:
@@ -59,6 +69,7 @@
     return_content: true
   register: wireguard_session_id_raw
   delegate_to: localhost
+  become: false
   run_once: true
   check_mode: false
 
@@ -138,6 +149,7 @@
         https_port: "443"
         tideways_sample_rate: "25"
   delegate_to: localhost
+  become: false
   run_once: true
   loop: "{{ services }}"
   when: item.is_external | default(false) | bool

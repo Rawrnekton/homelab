@@ -1,0 +1,5 @@
+---
+wireguard_road_warriors:
+  - name: laptop
+    public_key: "{{ vault_wireguard_laptop_public_key }}"
+    allowed_ip: "10.0.0.3/32"
