@@ -8,7 +8,7 @@
 # Resulting shape of iscsi_client_targets:
 #   - name: <portal display name>
 #     portal: <portal FQDN or IP, as configured>
-#     # added by - name: Resolve portal FQDNs and add portal_ip attribute
+#     # added by - name: Add portal_ip attribute
 #     portal_ip: <resolved IP>
 #     port: <int, optional, default 3260>
 #     targets:
@@ -21,19 +21,33 @@
 #         # added by - name: Add iscsi_dev path to each target
 #         iscsi_dev: /dev/disk/by-path/ip-<portal_ip>:<port>-iscsi-<IQN>-lun-0
 
-- name: Resolve portal FQDNs and add portal_ip attribute
-  ansible.builtin.set_fact:
-    iscsi_client_targets: >-
-      {{
-        iscsi_client_targets | map('combine', {
-          'portal_ip': lookup('community.general.dig', item.portal) | split(',') | first
-            if not (item.portal | ansible.utils.ipaddr)
-            else item.portal
-        }) | list
-      }}
+# DNS lookups must resolve against this host, not the control node: with
+# split-horizon DNS, the controller's view of a portal FQDN (e.g. a
+# WireGuard/NAT-forwarded external address) can differ from what this host
+# resolves internally. lookup() plugins always run on the control node, so
+# resolution is done via a command task instead, which runs here. getent
+# (rather than dig) is used so it goes through this host's NSS/resolver
+# path exactly as the iSCSI initiator itself will.
+- name: Resolve portal FQDNs on this host
+  ansible.builtin.command:
+    cmd: getent hosts {{ item.portal }}
   loop: "{{ iscsi_client_targets }}"
   loop_control:
     label: "{{ item.name }}"
+  when: not (item.portal | ansible.utils.ipaddr)
+  changed_when: false
+  register: portal_dns
+
+- name: Add portal_ip attribute
+  ansible.builtin.set_fact:
+    iscsi_client_targets: >-
+      {%- set result = [] -%}
+      {%- for portal in iscsi_client_targets -%}
+        {%- set ip = portal.portal if (portal.portal | ansible.utils.ipaddr)
+              else portal_dns.results[loop.index0].stdout_lines[0].split()[0] -%}
+        {%- set _ = result.append(portal | combine({'portal_ip': ip})) -%}
+      {%- endfor -%}
+      {{ result }}
 
 - name: Add iscsi_dev path to each target
   ansible.builtin.set_fact:
