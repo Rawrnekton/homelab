@@ -22,10 +22,10 @@
 
 - name: Build a list of the self-signed certificates
   ansible.builtin.set_fact:
-    selfsigned_certs: "{{ (selfsigned_certs | default([])) + [item.invocation.module_args.path] }}"
+    selfsigned_certs: "{{ (selfsigned_certs | default([])) + [item.item.path] }}"
   loop: "{{ cert_meta.results }}"
   loop_control:
-    label: "{{ item.invocation.module_args.path | basename }}"
+    label: "{{ item.item.path | basename }}"
   when: item.issuer == item.subject
 
 - name: Start async jobs for letsencrypt certificates
