@@ -15,6 +15,10 @@ argo-2
 argo-3
 odysseus
 pihole
+argus
+
+[monitoring]
+argus
 
 [vps]
 naglfar
