@@ -47,6 +47,8 @@ spec:
                 secretKeyRef:
                   name: mealie-database-secret
                   key: password
+            - name: OIDC_REQUIRES_EMAIL_VERIFICATION
+              value: "false"
           volumeMounts:
             - name: mealie-data
               mountPath: /app/data
