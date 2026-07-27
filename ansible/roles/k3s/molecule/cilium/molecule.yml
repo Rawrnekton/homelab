@@ -1,0 +1,103 @@
+---
+# Cilium scenario: one control-plane node with Cilium instead of flannel.
+#
+# Goal: the parts of the CNI switch that are deterministic - flannel and the
+# built-in network policy off, kube-proxy off, a HelmChart CR in the manifests
+# directory carrying the requested chart version and Helm values, and the
+# Cilium DaemonSet created by the HelmChart controller.
+#
+# The dataplane IS asserted here, and that is what the platform block below is
+# for. Cilium needs a kernel surface that the other scenarios do not:
+#
+#   - a PRIVATE cgroup namespace, different from the one of the host. The
+#     Cilium documentation asks for it, and with the host namespace the agent
+#     would work on the cgroup root of the machine that runs the tests.
+#   - bpffs at /sys/fs/bpf, bind-mounted rshared so the mounts the agent makes
+#     propagate. The host must have it mounted and shared:
+#       mount | grep /sys/fs/bpf     # bpf on /sys/fs/bpf type bpf
+#       findmnt -o PROPAGATION /sys/fs/bpf     # shared
+#   - /lib/modules, so the agent can load what it needs.
+#   - a host kernel of 5.14 or later and cgroup v2 (unified). Both are true on
+#     a current Ubuntu.
+#
+# This makes the scenario the only one that depends on the state of the host
+# kernel. It also pulls the chart from helm.cilium.io and the images from
+# quay.io, so it needs the network and it is the slowest of the ten.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - name: k3s-cilium
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: private
+    # Two mounts have to be right before systemd starts, so the entry point
+    # does them and only then hands over. kind does the same thing.
+    #
+    #   cgroup2 - the image declares /sys/fs/cgroup as a VOLUME, so Docker
+    #     puts an anonymous ext4 volume there and systemd finds no hierarchy;
+    #     the container then dies with exit 255 and an empty log. The other
+    #     scenarios paper over this by bind-mounting the cgroup tree of the
+    #     host, which needs cgroupns_mode: host - exactly what Cilium must not
+    #     have. Mounting cgroup2 here gives the container a cgroup root of its
+    #     own.
+    #   --make-rshared /run - Docker mounts the /run tmpfs private, and the
+    #     cilium-agent container then never starts: "path /var/run/netns is
+    #     mounted on /run but it is not a shared or slave mount". systemd sets
+    #     the propagation of / but not of /run, so it has to be done here.
+    command: '/bin/sh -c "mount -t cgroup2 none /sys/fs/cgroup && mount --make-rshared /run && exec /usr/lib/systemd/systemd"'
+    volumes:
+      # No /sys/fs/cgroup here: the entry point mounts it.
+      - /sys/fs/bpf:/sys/fs/bpf:rshared
+      # kmod-static-nodes.service fails with this mounted, which leaves
+      # systemd "degraded". Nothing k3s needs is in that unit.
+      - /lib/modules:/lib/modules:ro
+    tmpfs:
+      - /run
+      - /run/lock
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    host_vars:
+      k3s-cilium:
+        k3s_node_role: control
+        k3s_snapshotter: native
+        k3s_cni: cilium
+        # Bump together with the homelab. Must be a published chart version on
+        # https://helm.cilium.io, otherwise the HelmChart controller fails and
+        # the DaemonSet assertion fails for the wrong reason.
+        k3s_cilium_version: 1.20.1
+        k3s_cilium_values:
+          operator:
+            replicas: 1
+          # kube-proxy is off, so the agent cannot reach the API through a
+          # service IP. It talks to the local API server instead.
+          k8sServiceHost: 127.0.0.1
+          k8sServicePort: 6443
+          # The agent cannot mount cgroup2 itself inside the node container.
+          # The container already has the host hierarchy at /sys/fs/cgroup.
+          cgroup:
+            autoMount:
+              enabled: false
+            hostRoot: /sys/fs/cgroup
+        k3s_kube_proxy_replacement: true
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy

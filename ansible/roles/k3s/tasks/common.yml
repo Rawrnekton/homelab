@@ -1,0 +1,40 @@
+---
+# Work every node does, whatever role it plays, before k3s is installed.
+- name: Make sure the k3s configuration directory exists
+  ansible.builtin.file:
+    path: /etc/rancher/k3s/
+    state: directory
+    mode: "0755"
+
+- name: Set the required sysctl parameters
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    sysctl_set: true
+    reload: true
+    state: present
+  loop: "{{ k3s_sysctl_settings | dict2items }}"
+  when: k3s_sysctl_settings is defined
+
+# The embedded registry mirror is switched on in config.yaml on the servers,
+# but a node only pulls through it when containerd has a mirror entry. The
+# agents need this file as well, so it is written here and not in
+# post-install.yml.
+#
+# The file is only managed while k3s_spegel_enabled is true. Removing it again
+# is left to the operator: it is not ours to delete if someone put their own
+# registry configuration there.
+- name: Write the containerd registry configuration
+  ansible.builtin.template:
+    src: registries.yaml.j2
+    dest: /etc/rancher/k3s/registries.yaml
+    mode: "0644"
+  when: k3s_spegel_enabled | bool
+  notify: k3s configuration changed
+
+- name: Download the k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: "{{ k3s_install_script }}"
+    mode: "0755"
+  when: not (k3s_already_running | bool) or k3s_upgrade

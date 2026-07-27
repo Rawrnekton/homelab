@@ -1,0 +1,321 @@
+---
+# Verify: the per-node variable surface (molecule/features).
+#
+# Where the spec is open, these assertions check the EFFECT, not the
+# rendering. k3s_extra_server_args, for example, must reach the k3s server
+# process; whether the role puts them in config.yaml or in INSTALL_K3S_EXEC is
+# an implementation choice and is not asserted.
+#
+# Every assertion carries `ignore_errors: true` and is collected into
+# feature_checks. The report play at the end fails once with the whole table.
+# This scenario covers eight independent variables, and stopping at the first
+# missing one would hide the other seven - which is the opposite of what you
+# want while you are implementing them.
+#
+# kubectl runs through `command` on purpose: kubernetes.core needs the python
+# kubernetes client on the target, which is not worth installing into every
+# test container.
+- name: Verify the node reflects every configured feature
+  hosts: all
+  become: true
+  tasks:
+    - name: Wait for the node to report Ready
+      ansible.builtin.command: k3s kubectl get nodes --no-headers
+      register: node_list
+      changed_when: false
+      until: "'Ready' in node_list.stdout"
+      retries: 12
+      delay: 5
+
+    - name: Read the node object
+      ansible.builtin.command: >-
+        k3s kubectl get node {{ inventory_hostname }} -o json
+      register: node_raw
+      changed_when: false
+
+    - name: Keep the node object handy
+      ansible.builtin.set_fact:
+        node: "{{ node_raw.stdout | from_json }}"
+
+    - name: Read rendered k3s config
+      ansible.builtin.slurp:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_raw
+
+    # -- k3s_node_labels -------------------------------------------------
+    - name: Assert the configured node label is on the node
+      ansible.builtin.assert:
+        that:
+          - node.metadata.labels['molecule.test/from-list'] | default('') == 'true'
+        fail_msg: >-
+          k3s_node_labels did not reach the node. Labels on the node:
+          {{ node.metadata.labels | dict2items | map(attribute='key') | list }}
+      register: check_node_labels
+      ignore_errors: true
+
+    # -- k3s_extra_server_args -------------------------------------------
+    - name: Assert the pass-through server argument took effect
+      ansible.builtin.assert:
+        that:
+          - node.metadata.labels['molecule.test/from-server-args'] | default('') == 'true'
+        fail_msg: >-
+          k3s_extra_server_args did not reach the k3s server process. The
+          --node-label it carries is missing from the node object.
+      register: check_extra_server_args
+      ignore_errors: true
+
+    # -- k3s_node_taints -------------------------------------------------
+    - name: Assert the configured taint is on the node
+      vars:
+        taints: "{{ node.spec.taints | default([]) }}"
+        wanted: "{{ taints | selectattr('key', 'equalto', 'molecule.test/dedicated') | list }}"
+      ansible.builtin.assert:
+        that:
+          - wanted | length == 1
+          - wanted[0].value == 'testing'
+          - wanted[0].effect == 'NoSchedule'
+        fail_msg: >-
+          k3s_node_taints did not reach the node. Taints on the node: {{ taints }}
+      register: check_node_taints
+      ignore_errors: true
+
+    # -- k3s_kubelet_args ------------------------------------------------
+    - name: Assert the kubelet argument took effect
+      ansible.builtin.assert:
+        that:
+          - node.status.allocatable.pods == '42'
+        fail_msg: >-
+          k3s_kubelet_args did not reach the kubelet. max-pods=42 was requested,
+          the node reports allocatable pods = {{ node.status.allocatable.pods }}.
+      register: check_kubelet_args
+      ignore_errors: true
+
+    # -- k3s_sysctl_settings ---------------------------------------------
+    - name: Read the tuned inotify limits
+      ansible.builtin.slurp:
+        path: "/proc/sys/fs/inotify/{{ item }}"
+      register: inotify_limits
+      loop:
+        - max_user_instances
+        - max_user_watches
+
+    - name: Assert the sysctl settings are live
+      vars:
+        values: "{{ inotify_limits.results | map(attribute='content') | map('b64decode') | map('trim') | list }}"
+      ansible.builtin.assert:
+        that:
+          - values[0] == '512'
+          - values[1] == '524288'
+        fail_msg: >-
+          k3s_sysctl_settings did not reach the kernel. Got
+          max_user_instances={{ values[0] }}, max_user_watches={{ values[1] }}.
+      register: check_sysctl
+      ignore_errors: true
+
+    # -- k3s_local_path_provisioner_enabled ------------------------------
+    #
+    # The node carries a NoSchedule taint, so the provisioner pod stays
+    # Pending. Existence of the objects is what proves the built-in is on.
+    - name: List deployments in kube-system
+      ansible.builtin.command: k3s kubectl get deployments -n kube-system -o name
+      register: kube_system_deployments
+      changed_when: false
+
+    - name: Assert the local-path provisioner is deployed
+      ansible.builtin.assert:
+        that:
+          - "'local-path-provisioner' in kube_system_deployments.stdout"
+        fail_msg: >-
+          k3s_local_path_provisioner_enabled is true, but no
+          local-path-provisioner deployment exists in kube-system.
+      register: check_local_path_deployment
+      ignore_errors: true
+
+    - name: List storage classes
+      ansible.builtin.command: k3s kubectl get storageclass -o name
+      register: storage_classes
+      changed_when: false
+
+    - name: Assert the local-path storage class exists
+      ansible.builtin.assert:
+        that:
+          - "'local-path' in storage_classes.stdout"
+        fail_msg: >-
+          k3s_local_path_provisioner_enabled is true, but there is no
+          local-path storage class. Present: {{ storage_classes.stdout_lines }}
+      register: check_local_path_storageclass
+      ignore_errors: true
+
+    # -- k3s_spegel_enabled ----------------------------------------------
+    #
+    # Spegel ships inside k3s as the embedded registry mirror. It runs in the
+    # k3s process, not as a pod, so config.yaml plus registries.yaml is the
+    # only evidence available on the node.
+    - name: Assert the embedded registry is switched on
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode }}"
+      ansible.builtin.assert:
+        that:
+          - "'embedded-registry: true' in k3s_config"
+        fail_msg: >-
+          k3s_spegel_enabled is true, but config.yaml does not enable the
+          embedded registry. Rendered config:
+          {{ k3s_config }}
+      register: check_spegel_config
+      ignore_errors: true
+
+    - name: Check the registry mirror configuration
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/registries.yaml
+      register: registries_file
+
+    - name: Assert the registry mirror file exists
+      ansible.builtin.assert:
+        that:
+          - registries_file.stat.exists
+        fail_msg: >-
+          k3s_spegel_enabled is true, but /etc/rancher/k3s/registries.yaml is
+          missing. The embedded registry needs a mirror entry to be used.
+      register: check_spegel_registries_file
+      ignore_errors: true
+
+    - name: Read the registry mirror configuration
+      ansible.builtin.slurp:
+        path: /etc/rancher/k3s/registries.yaml
+      register: registries_raw
+      when: registries_file.stat.exists
+
+    - name: Assert the mirror configuration holds a mirrors block
+      vars:
+        registries: "{{ registries_raw['content'] | b64decode | from_yaml }}"
+      ansible.builtin.assert:
+        that:
+          - registries.mirrors is defined
+          - registries.mirrors | length > 0
+        fail_msg: "registries.yaml holds no mirrors: {{ registries }}"
+      register: check_spegel_mirrors
+      ignore_errors: true
+      when: registries_file.stat.exists
+
+    - name: Collect the results of the node checks
+      ansible.builtin.set_fact:
+        feature_checks: >-
+          {{ feature_checks | default([]) + [
+               {'name': 'k3s_node_labels',
+                'failed': check_node_labels.failed | default(false),
+                'skipped': check_node_labels.skipped | default(false)},
+               {'name': 'k3s_extra_server_args',
+                'failed': check_extra_server_args.failed | default(false),
+                'skipped': check_extra_server_args.skipped | default(false)},
+               {'name': 'k3s_node_taints',
+                'failed': check_node_taints.failed | default(false),
+                'skipped': check_node_taints.skipped | default(false)},
+               {'name': 'k3s_kubelet_args',
+                'failed': check_kubelet_args.failed | default(false),
+                'skipped': check_kubelet_args.skipped | default(false)},
+               {'name': 'k3s_sysctl_settings',
+                'failed': check_sysctl.failed | default(false),
+                'skipped': check_sysctl.skipped | default(false)},
+               {'name': 'k3s_local_path_provisioner_enabled (deployment)',
+                'failed': check_local_path_deployment.failed | default(false),
+                'skipped': check_local_path_deployment.skipped | default(false)},
+               {'name': 'k3s_local_path_provisioner_enabled (storage class)',
+                'failed': check_local_path_storageclass.failed | default(false),
+                'skipped': check_local_path_storageclass.skipped | default(false)},
+               {'name': 'k3s_spegel_enabled (embedded-registry)',
+                'failed': check_spegel_config.failed | default(false),
+                'skipped': check_spegel_config.skipped | default(false)},
+               {'name': 'k3s_spegel_enabled (registries.yaml)',
+                'failed': check_spegel_registries_file.failed | default(false),
+                'skipped': check_spegel_registries_file.skipped | default(false)},
+               {'name': 'k3s_spegel_enabled (mirrors block)',
+                'failed': check_spegel_mirrors.failed | default(false),
+                'skipped': check_spegel_mirrors.skipped | default(false)}
+             ] }}
+
+- name: Verify the kubeconfig reached the controller
+  hosts: all
+  gather_facts: false
+  tasks:
+    # -- k3s_kubeconfig_fetch / k3s_kubeconfig_dest ----------------------
+    - name: Check the fetched kubeconfig
+      ansible.builtin.stat:
+        path: "{{ k3s_kubeconfig_dest }}"
+      delegate_to: localhost
+      become: false
+      register: fetched_kubeconfig
+
+    - name: Assert the kubeconfig was written to the controller
+      ansible.builtin.assert:
+        that:
+          - fetched_kubeconfig.stat.exists
+        fail_msg: >-
+          k3s_kubeconfig_fetch is true, but nothing was written to
+          {{ k3s_kubeconfig_dest }} on the Ansible controller.
+      register: check_kubeconfig_fetched
+      ignore_errors: true
+
+    - name: Read the fetched kubeconfig
+      ansible.builtin.slurp:
+        path: "{{ k3s_kubeconfig_dest }}"
+      delegate_to: localhost
+      become: false
+      register: fetched_kubeconfig_raw
+      when: fetched_kubeconfig.stat.exists
+
+    - name: Assert the server address was rewritten to the node
+      vars:
+        kubeconfig: "{{ fetched_kubeconfig_raw['content'] | b64decode | from_yaml }}"
+        server: "{{ kubeconfig.clusters[0].cluster.server }}"
+      ansible.builtin.assert:
+        that:
+          - "'127.0.0.1' not in server"
+          - "'localhost' not in server"
+          - ansible_default_ipv4.address in server
+        fail_msg: >-
+          The fetched kubeconfig still points at {{ server }}. It must point at
+          the node address {{ ansible_default_ipv4.address }}.
+      register: check_kubeconfig_address
+      ignore_errors: true
+      when: fetched_kubeconfig.stat.exists
+
+    - name: Collect the results of the kubeconfig checks
+      ansible.builtin.set_fact:
+        feature_checks: >-
+          {{ feature_checks + [
+               {'name': 'k3s_kubeconfig_fetch (written to the controller)',
+                'failed': check_kubeconfig_fetched.failed | default(false),
+                'skipped': check_kubeconfig_fetched.skipped | default(false)},
+               {'name': 'k3s_kubeconfig_fetch (address rewritten)',
+                'failed': check_kubeconfig_address.failed | default(false),
+                'skipped': check_kubeconfig_address.skipped | default(false)}
+             ] }}
+
+- name: Report the feature checks
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Show the outcome of every check
+      ansible.builtin.debug:
+        msg: "{{ '%-4s  %s' | format(item_status, item.name) }}"
+      vars:
+        # A skipped check is not a passing check. It means the thing it depends
+        # on is missing, and the report must say so rather than stay quiet.
+        item_status: "{{ 'SKIP' if item.skipped | bool else ('FAIL' if item.failed | bool else 'PASS') }}"
+      loop: "{{ feature_checks }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert every configured feature reached the node
+      vars:
+        failed_checks: >-
+          {{ feature_checks | selectattr('failed', 'truthy') | map(attribute='name') | list
+             + feature_checks | selectattr('skipped', 'truthy') | map(attribute='name') | list }}
+      ansible.builtin.assert:
+        that:
+          - failed_checks | length == 0
+        fail_msg: >-
+          {{ failed_checks | length }} of {{ feature_checks | length }} feature
+          checks failed or were skipped: {{ failed_checks | join(', ') }}
+        success_msg: >-
+          All {{ feature_checks | length }} feature checks passed.

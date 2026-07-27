@@ -1,0 +1,73 @@
+---
+# Upgrade scenario: one control-plane node and one worker.
+#
+# Goal: k3s_upgrade is opt-in. A re-run with a newer channel and the flag off
+# must change nothing; the same re-run with the flag on must move the cluster
+# to the new minor version, and must leave every node schedulable afterwards.
+#
+# The worker is here so that the cordon-and-drain step has somewhere to move
+# pods to.
+#
+# The two channels must stay adjacent minor versions: k3s follows the upstream
+# Kubernetes skew policy, and a two-minor jump is not a supported upgrade.
+# Bump both together when the homelab moves on.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &node
+    name: k3s-bootstrap
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: k3s-molecule-upgrade
+    network_mode: k3s-molecule-upgrade
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - control
+  - <<: *node
+    name: k3s-worker1
+    groups:
+      - worker
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      all:
+        # overlayfs does not work nested inside Docker.
+        k3s_snapshotter: native
+        # The version the cluster starts on. side_effect.yml moves it to
+        # molecule_upgrade_to_channel.
+        k3s_release_channel: v1.35
+        molecule_upgrade_to_channel: v1.36
+      control:
+        k3s_node_role: control
+      worker:
+        k3s_node_role: worker
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy

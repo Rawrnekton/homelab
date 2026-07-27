@@ -1,0 +1,124 @@
+---
+# Verify: one control-plane node and two workers (molecule/workers).
+#
+# The first play gathers facts on every host. Without it the worker play below
+# cannot read the server address out of hostvars['k3s-bootstrap'], because
+# Ansible only holds facts for the hosts a play has run on.
+- name: Gather facts on every node
+  hosts: all
+
+- name: Verify the worker nodes
+  hosts: worker
+  become: true
+  tasks:
+    # -- Config shape ----------------------------------------------------
+    - name: Read rendered k3s config
+      ansible.builtin.slurp:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_raw
+
+    - name: Assert the worker points at the server and carries a token
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode }}"
+        bootstrap_address: "{{ hostvars['k3s-bootstrap']['ansible_default_ipv4']['address'] }}"
+      ansible.builtin.assert:
+        that:
+          - "'cluster-init' not in k3s_config"
+          - "'server: \"https://' + bootstrap_address + ':6443\"' in k3s_config"
+          - "'token: ' in k3s_config"
+        fail_msg: "Worker config.yaml does not point at the server:\n{{ k3s_config }}"
+
+    - name: Assert the worker config carries no server-only flag
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode }}"
+      ansible.builtin.assert:
+        that:
+          - "'write-kubeconfig-mode' not in k3s_config"
+        fail_msg: >-
+          write-kubeconfig-mode is a server-only flag. k3s agent exits with
+          "flag provided but not defined" when it is present.
+          Worker config:
+          {{ k3s_config }}
+
+    # -- Service state ---------------------------------------------------
+    - name: Read the k3s agent service state
+      ansible.builtin.systemd:
+        name: k3s-agent
+      register: k3s_agent_service
+
+    - name: Assert the agent is enabled and running
+      ansible.builtin.assert:
+        that:
+          - k3s_agent_service.status.ActiveState == 'active'
+          - k3s_agent_service.status.UnitFileState == 'enabled'
+
+    - name: Check for a server unit on the worker
+      ansible.builtin.stat:
+        path: /etc/systemd/system/k3s.service
+      register: worker_server_unit
+
+    - name: Assert the worker runs no k3s server
+      ansible.builtin.assert:
+        that:
+          - not worker_server_unit.stat.exists
+        fail_msg: "Worker node has a k3s server unit; it must only run k3s-agent"
+
+- name: Verify the cluster shape from the server
+  hosts: k3s-bootstrap
+  become: true
+  tasks:
+    - name: Wait for all three nodes to report Ready
+      ansible.builtin.command: k3s kubectl get nodes --no-headers
+      register: node_list
+      changed_when: false
+      until:
+        - node_list.stdout_lines | length == 3
+        - "'NotReady' not in node_list.stdout"
+      retries: 24
+      delay: 10
+
+    - name: Assert all three nodes are present and Ready
+      ansible.builtin.assert:
+        that:
+          - node_list.stdout_lines | length == 3
+          - "'NotReady' not in node_list.stdout"
+        fail_msg: "Expected 3 Ready nodes, got:\n{{ node_list.stdout }}"
+
+    - name: List the nodes that carry the control-plane role
+      ansible.builtin.command: >-
+        k3s kubectl get nodes
+        -l node-role.kubernetes.io/control-plane=true -o name
+      register: control_plane_nodes
+      changed_when: false
+
+    - name: Assert only the bootstrap node is a control-plane node
+      ansible.builtin.assert:
+        that:
+          - control_plane_nodes.stdout_lines == ['node/k3s-bootstrap']
+        fail_msg: >-
+          Unexpected control-plane nodes: {{ control_plane_nodes.stdout_lines }}
+
+    # -- Worker variables ------------------------------------------------
+    - name: Read the worker node objects
+      ansible.builtin.command: >-
+        k3s kubectl get node {{ item }} -o json
+      register: worker_objects
+      changed_when: false
+      loop:
+        - k3s-worker1
+        - k3s-worker2
+
+    - name: Assert both label sources reached both workers
+      vars:
+        labels: "{{ (item.stdout | from_json).metadata.labels }}"
+      ansible.builtin.assert:
+        that:
+          - labels['molecule.test/from-list'] | default('') == 'true'
+          - labels['molecule.test/from-agent-args'] | default('') == 'true'
+        fail_msg: >-
+          k3s_node_labels or k3s_extra_agent_args did not reach {{ item.item }}.
+          Labels on the node:
+          {{ labels | dict2items | map(attribute='key') | list }}
+      loop: "{{ worker_objects.results }}"
+      loop_control:
+        label: "{{ item.item }}"

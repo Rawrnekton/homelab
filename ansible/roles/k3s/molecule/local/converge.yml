@@ -1,0 +1,515 @@
+---
+# Converge: everything that can be checked on the controller.
+#
+# This scenario has no verify playbook on purpose. A rejected input must make
+# the play that submits it fail, so the assertions live here, in the converge.
+#
+# Three helper task files hold the plumbing:
+#   tasks/expect-rejected.yml - the input must fail, with case_expect in the message
+#   tasks/expect-accepted.yml - the input must pass
+#   tasks/expect-config.yml   - config.yaml.j2 must render a given result
+#
+# Every case records its outcome in molecule_case_results, and the report play
+# at the end fails once with the whole table. One broken rule must not hide
+# the rules behind it.
+- name: Verify the role rejects bad input
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    # -- Install source: version vs. channel -----------------------------
+    - name: Reject k3s_version together with k3s_release_channel
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_version and k3s_release_channel both set
+        case_expect: mutually exclusive
+        k3s_version: v1.31.4+k3s1
+        k3s_release_channel: stable
+
+    - name: Reject a channel that is not a channel
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_release_channel is a nonsense string
+        case_expect: Invalid k3s_release_channel
+        k3s_release_channel: banana
+
+    # -- CNI -------------------------------------------------------------
+    - name: Reject Cilium variables while flannel is the CNI
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_cilium_version set while k3s_cni is flannel
+        case_expect: unset when using flannel
+        k3s_cni: flannel
+        k3s_cilium_version: 1.16.3
+
+    - name: Reject kube-proxy replacement while flannel is the CNI
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_kube_proxy_replacement set while k3s_cni is flannel
+        case_expect: unset when using flannel
+        k3s_cni: flannel
+        k3s_kube_proxy_replacement: true
+
+    - name: Reject Cilium without a chart version
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_cni is cilium but k3s_cilium_version is unset
+        case_expect: k3s_cilium_version needs to be defined
+        k3s_cni: cilium
+
+    - name: Reject a Cilium chart version that is not semver
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_cilium_version is not a full semver
+        case_expect: k3s_cilium_version needs to be defined
+        k3s_cni: cilium
+        k3s_cilium_version: "1.16"
+
+    - name: Reject Cilium values that are not a dict
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_cilium_values is a string
+        case_expect: k3s_cilium_values must be a dict
+        k3s_cni: cilium
+        k3s_cilium_version: 1.16.3
+        k3s_cilium_values: not-a-dict
+
+    # -- Node configuration ----------------------------------------------
+    - name: Reject a TLS SAN that is neither a hostname nor an IP address
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_tls_san holds an invalid entry
+        case_expect: k3s_tls_san needs to be a list of hostnames
+        k3s_tls_san:
+          - "not a hostname!"
+
+    - name: Reject a node label without a value
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_node_labels entry is not key=value
+        case_expect: must be in key=value format
+        k3s_node_labels:
+          - keyonly
+
+    - name: Reject a node taint with an unknown effect
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_node_taints entry uses an invalid effect
+        case_expect: must be in key=value:Effect format
+        k3s_node_taints:
+          - "dedicated=gpu:Bogus"
+
+    # -- Pass-through arguments ------------------------------------------
+    - name: Reject a kubelet argument written as a command-line flag
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_kubelet_args entry carries the leading dashes
+        case_expect: without the leading dashes
+        k3s_kubelet_args:
+          - "--max-pods=110"
+
+    - name: Reject a server argument without the leading dashes
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_extra_server_args entry has no leading dashes
+        case_expect: must be a k3s server flag that starts
+        k3s_extra_server_args:
+          - "etcd-expose-metrics=true"
+
+    - name: Reject an agent argument without the leading dashes
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_extra_agent_args entry has no leading dashes
+        case_expect: must be a k3s agent flag that starts
+        k3s_extra_agent_args:
+          - "node-ip=10.10.0.5"
+
+    - name: Reject server arguments on a worker node
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_extra_server_args set on a worker
+        case_expect: only valid on control-plane nodes
+        k3s_node_role: worker
+        k3s_extra_server_args:
+          - "--etcd-expose-metrics=true"
+
+    # -- Kubeconfig ------------------------------------------------------
+    - name: Reject a kubeconfig fetch without a destination
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_kubeconfig_fetch is true but k3s_kubeconfig_dest is unset
+        case_expect: k3s_kubeconfig_dest must be set
+        k3s_kubeconfig_fetch: true
+
+    # -- Sysctl ----------------------------------------------------------
+    - name: Reject sysctl settings that are not a dict
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: k3s_sysctl_settings is a string
+        case_expect: must be a dictionary of sysctl
+        k3s_sysctl_settings: fs.inotify.max_user_watches=524288
+
+- name: Verify the role accepts good input
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Accept the role defaults
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: no variables set at all
+
+    - name: Accept a minor version channel
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: k3s_release_channel is a minor version channel
+        k3s_release_channel: v1.32
+
+    - name: Accept a pinned version
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: k3s_version is pinned
+        k3s_version: v1.31.4+k3s1
+
+    - name: Accept a TLS SAN without a domain part
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: k3s_tls_san holds a single-label hostname
+        k3s_tls_san:
+          - k3s-api
+
+    - name: Accept a fully populated control-plane configuration
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: every variable set to a valid value
+        k3s_node_role: control
+        k3s_release_channel: stable
+        k3s_upgrade: true
+        k3s_snapshotter: native
+        k3s_cni: cilium
+        k3s_cilium_version: 1.16.3
+        k3s_cilium_values:
+          operator:
+            replicas: 1
+        k3s_kube_proxy_replacement: true
+        # Both forms must pass: a hostname and an IP address.
+        k3s_tls_san:
+          - k3s.example.com
+          - 10.10.0.5
+        k3s_node_labels:
+          - "topology.kubernetes.io/zone=homelab"
+        k3s_node_taints:
+          - "dedicated=gpu:NoSchedule"
+        k3s_kubelet_args:
+          - "max-pods=110"
+        k3s_extra_server_args:
+          - "--etcd-expose-metrics=true"
+        k3s_extra_agent_args:
+          - "--node-ip=10.10.0.5"
+        k3s_kubeconfig_fetch: true
+        k3s_kubeconfig_dest: /tmp/kubeconfig.yaml
+        k3s_sysctl_settings:
+          fs.inotify.max_user_instances: 512
+        k3s_local_path_provisioner_enabled: true
+        k3s_spegel_enabled: true
+
+    - name: Accept a worker configuration
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: worker with agent arguments only
+        k3s_node_role: worker
+        k3s_extra_agent_args:
+          - "--node-label=rack=r1"
+
+# --------------------------------------------------------------------------
+# config.yaml.j2 is where ten of the role's variables turn into node state, and
+# rendering it needs no node at all. Every case renders the real template
+# through the real pass-through-argument parser (tasks/parse-extra-args.yml)
+# and reads the result back.
+#
+# k3s-render-peer is the inventory host that stands in for the bootstrap node
+# in the "joining node" cases. No play runs on it; the template only reads its
+# address and its join token out of hostvars.
+- name: Verify what config.yaml.j2 renders
+  hosts: localhost
+  gather_facts: false
+  # The template reads the role's defaults and its derived values. Loading the
+  # real files keeps this scenario honest: a default that changes changes the
+  # rendering here too. vars_files sits BELOW the vars a case sets on its
+  # include, so a case still overrides whatever it names.
+  vars_files:
+    - ../../defaults/main.yml
+    - ../../vars/main.yml
+  vars:
+    k3s_config_template: "{{ playbook_dir }}/../../templates/config.yaml.j2"
+  tasks:
+    # -- Cluster membership ----------------------------------------------
+    - name: Render a bootstrap control-plane node on the role defaults
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: bootstrap node, role defaults
+        k3s_first_control_node: localhost
+        case_contains:
+          - "cluster-init: true"
+          - 'write-kubeconfig-mode: "0644"'
+        case_absent:
+          - "server:"
+          - "token:"
+          - "node-label"
+          - "node-taint"
+          - "kubelet-arg"
+          - "tls-san"
+          - "embedded-registry"
+          - "flannel-backend"
+        # local-storage off is the default: the built-in provisioner must be
+        # disabled unless it was asked for.
+        case_keys:
+          cluster-init: true
+          disable:
+            - local-storage
+
+    - name: Render a joining control-plane node
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: joining control-plane node points at the bootstrap node
+        k3s_first_control_node: k3s-render-peer
+        k3s_node_role: control
+        case_contains:
+          - 'server: "https://10.10.0.1:6443"'
+          - "token: K10molecule::server:0000"
+          - 'write-kubeconfig-mode: "0644"'
+        case_absent:
+          - "cluster-init"
+
+    - name: Render a worker node
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: worker node carries no server-only key
+        k3s_first_control_node: k3s-render-peer
+        k3s_node_role: worker
+        case_contains:
+          - 'server: "https://10.10.0.1:6443"'
+          - "token: K10molecule::server:0000"
+        # write-kubeconfig-mode, disable and tls-san are server-only.
+        # `k3s agent` exits with "flag provided but not defined" on any of them.
+        case_absent:
+          - "cluster-init"
+          - "write-kubeconfig-mode"
+          - "disable:"
+          - "tls-san"
+          - "embedded-registry"
+
+    # -- Node identity ----------------------------------------------------
+    - name: Render labels, taints and kubelet arguments
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: node labels, taints and kubelet arguments
+        k3s_first_control_node: localhost
+        k3s_node_labels:
+          - "topology.kubernetes.io/zone=homelab"
+        k3s_node_taints:
+          - "dedicated=gpu:NoSchedule"
+        k3s_kubelet_args:
+          - "max-pods=42"
+        case_keys:
+          node-label:
+            - "topology.kubernetes.io/zone=homelab"
+          node-taint:
+            - "dedicated=gpu:NoSchedule"
+          kubelet-arg:
+            - "max-pods=42"
+
+    # -- Pass-through arguments -------------------------------------------
+    - name: Render pass-through server arguments
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: server arguments merge into the keys they share
+        k3s_first_control_node: localhost
+        k3s_node_labels:
+          - "molecule.test/from-list=true"
+        k3s_extra_server_args:
+          - "--node-label=molecule.test/from-server-args=true"
+          - "--etcd-expose-metrics=true"
+        case_keys:
+          node-label:
+            - "molecule.test/from-list=true"
+            - "molecule.test/from-server-args=true"
+          etcd-expose-metrics: true
+
+    - name: Render the two shapes a pass-through argument can take
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: an argument without a value is true, a repeated one is a list
+        k3s_first_control_node: localhost
+        k3s_extra_server_args:
+          - "--debug"
+          - "--kube-apiserver-arg=audit-log-maxage=30"
+          - "--kube-apiserver-arg=audit-log-maxbackup=10"
+        case_keys:
+          debug: true
+          kube-apiserver-arg:
+            - "audit-log-maxage=30"
+            - "audit-log-maxbackup=10"
+
+    - name: Render pass-through agent arguments on a worker
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: agent arguments reach a worker
+        k3s_first_control_node: k3s-render-peer
+        k3s_node_role: worker
+        k3s_node_labels:
+          - "molecule.test/from-list=true"
+        k3s_extra_agent_args:
+          - "--node-label=molecule.test/from-agent-args=true"
+        case_keys:
+          node-label:
+            - "molecule.test/from-list=true"
+            - "molecule.test/from-agent-args=true"
+
+    # -- Feature switches --------------------------------------------------
+    - name: Render the local-path provisioner switched on
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: local-path provisioner on leaves the built-in alone
+        k3s_first_control_node: localhost
+        k3s_local_path_provisioner_enabled: true
+        case_absent:
+          - "disable:"
+          - "local-storage"
+
+    - name: Render Spegel switched on
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: Spegel switches the embedded registry on
+        k3s_first_control_node: localhost
+        k3s_spegel_enabled: true
+        case_keys:
+          embedded-registry: true
+
+    - name: Render the TLS SANs
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: TLS SANs reach the configuration
+        k3s_first_control_node: localhost
+        k3s_tls_san:
+          - k3s-api.molecule.test
+          - 10.10.0.5
+        case_keys:
+          tls-san:
+            - k3s-api.molecule.test
+            - "10.10.0.5"
+
+    - name: Render the containerd snapshotter
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: the snapshotter is written when it is set
+        k3s_first_control_node: localhost
+        k3s_snapshotter: native
+        case_keys:
+          snapshotter: native
+
+    # -- Cilium ------------------------------------------------------------
+    - name: Render the Cilium switch with kube-proxy replaced
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: cilium hands the network over and switches kube-proxy off
+        k3s_first_control_node: localhost
+        k3s_cni: cilium
+        k3s_cilium_version: 1.16.3
+        k3s_kube_proxy_replacement: true
+        case_keys:
+          flannel-backend: none
+          disable-network-policy: true
+          disable-kube-proxy: true
+
+    - name: Render the Cilium switch with kube-proxy kept
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: cilium without kube-proxy replacement leaves kube-proxy on
+        k3s_first_control_node: localhost
+        k3s_cni: cilium
+        k3s_cilium_version: 1.16.3
+        case_keys:
+          flannel-backend: none
+        case_absent:
+          - "disable-kube-proxy"
+
+    - name: Render the Cilium switch on a worker
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: a worker carries no Cilium key
+        k3s_first_control_node: k3s-render-peer
+        k3s_node_role: worker
+        k3s_cni: cilium
+        k3s_cilium_version: 1.16.3
+        k3s_kube_proxy_replacement: true
+        # Server-only, like every other key in that block: `k3s agent` exits
+        # with "flag provided but not defined" on them.
+        case_absent:
+          - "flannel-backend"
+          - "disable-network-policy"
+          - "disable-kube-proxy"
+
+    # The helper renders whatever k3s_config_template names, so the HelmChart
+    # CR gets the same treatment as config.yaml.
+    - name: Render the Cilium HelmChart manifest
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: the HelmChart CR carries the version, the values and kubeProxyReplacement
+        k3s_config_template: "{{ playbook_dir }}/../../templates/cilium.yaml.j2"
+        k3s_first_control_node: localhost
+        k3s_cni: cilium
+        k3s_cilium_version: 1.16.3
+        k3s_kube_proxy_replacement: true
+        k3s_cilium_values:
+          operator:
+            replicas: 1
+        case_contains:
+          # bootstrap: true is what lets helm-controller run its job before
+          # the cluster has a network. Without it the install deadlocks.
+          - "bootstrap: true"
+          - 'version: "1.16.3"'
+          - "valuesContent: |-"
+          - "kubeProxyReplacement: true"
+          - "replicas: 1"
+        case_keys:
+          kind: HelmChart
+
+    - name: Render the Cilium HelmChart manifest without kube-proxy replacement
+      ansible.builtin.include_tasks: tasks/expect-config.yml
+      vars:
+        case_name: the HelmChart CR only sets kubeProxyReplacement when asked to
+        k3s_config_template: "{{ playbook_dir }}/../../templates/cilium.yaml.j2"
+        k3s_first_control_node: localhost
+        k3s_cni: cilium
+        k3s_cilium_version: 1.16.3
+        k3s_cilium_values:
+          operator:
+            replicas: 1
+        case_absent:
+          - "kubeProxyReplacement"
+
+- name: Report the results
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Show the outcome of every case
+      ansible.builtin.debug:
+        msg: "{{ '%-4s  %s' | format('PASS' if item.ok | bool else 'FAIL', item.name) }}"
+      loop: "{{ molecule_case_results }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert every case behaved as the contract says
+      vars:
+        failed_cases: "{{ molecule_case_results | selectattr('ok', 'falsy') | list }}"
+      ansible.builtin.assert:
+        that:
+          - failed_cases | length == 0
+        fail_msg: >-
+          {{ failed_cases | length }} of {{ molecule_case_results | length }}
+          cases failed:
+          {% for case in failed_cases %}
+          - {{ case.name }}: {{ case.detail | trim }}
+          {% endfor %}
+        success_msg: >-
+          All {{ molecule_case_results | length }} cases behaved as the
+          contract says.
