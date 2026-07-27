@@ -1,0 +1,11 @@
+---
+# Converge only the nodes of the first cluster. The role does not touch
+# k3s-worker2 until side_effect.yml adds it.
+#
+# Thus this scenario has its own converge playbook. All other scenarios use
+# molecule/resources/converge.yml.
+- name: Converge
+  hosts: initial
+  become: true
+  roles:
+    - role: k3s

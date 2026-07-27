@@ -26,12 +26,12 @@
   roles:
     - { role: dns, tags: [dns] }
 
-- name: Provision Cluster
+- name: Provision argo Cluster
   hosts: argo
   become: true
   roles:
     - { role: lvm, tags: [lvm] }
-    - { role: cluster-setup, tags: [cluster] }
+    - { role: k3s, tags: [k3s] }
     - { role: longhorn_requirements, tags: [longhorn_requirements] }
 
 - name: Prepare the storage of the monitoring host
