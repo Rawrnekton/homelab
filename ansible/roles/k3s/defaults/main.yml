@@ -1,19 +1,49 @@
 ---
-# defaults file for cluster-setup
+# --- Role state ---
+k3s_state: present # present (default) or absent
 
-# can be `control` or `worker`
-k3s_node_role: control
-k3s_join_token: "CHANGE ME"
+# --- Node identity ---
+k3s_node_role: control # control (default) or worker
 
-#cluster_setup_k3s_channel: "stable"
-#cluster_setup_k3s_version: "v1.30.4+k3s1"
-#
-#cluster_setup_ranche_hostname: "rancher.{{ hostvars[groups['control'][0]]['ansible_default_ipv4']['address'] }}.sslip.io"
-#
-#cluster_setup_node_labels:
-#- foo
-#- bar
-#
-#rancher_replica_count: 1
-#rancher_bootstrap_password: "{{ vault_rancher_bootstrap_password }}"
-#rancher_version: 2.9.2
+# --- Install / versioning (mutually exclusive, none must be set) ---
+# k3s_release_channel: stable # stable (default), latest, or a channel name
+# k3s_version: "v1.36.2+k3s1" # pin to exact version
+
+# --- Upgrades ---
+k3s_upgrade: false # false (default), opt-in re-run of install script
+
+# --- Container runtime ---
+# k3s_snapshotter:                    # overlayfs (k3s default), native, fuse-overlayfs, stargz
+
+# --- Networking / CNI ---
+k3s_cni: flannel # flannel (default) or cilium
+# k3s_cilium_version:                 # Cilium chart version
+# k3s_cilium_values:                  # dict of Helm values for the HelmChart CR
+# k3s_kube_proxy_replacement:         # bool, cilium fully replaces kube-proxy
+
+# --- TLS ---
+# k3s_tls_san:                        # list of extra SANs
+
+# --- Node config ---
+# k3s_node_labels:                    # list
+# k3s_node_taints:                    # list
+
+# --- Pass-through args ---
+# k3s_kubelet_args:                   # list
+# k3s_extra_server_args:              # list
+# k3s_extra_agent_args:               # list
+
+# --- Kubeconfig ---
+k3s_kubeconfig_fetch: false # false (default), fetch to the Ansible controller
+# k3s_kubeconfig_dest:                # path on controller
+
+# --- Sysctl ---
+# k3s_sysctl_settings:                # dict
+#   fs.inotify.max_user_instances: 512
+#   fs.inotify.max_user_watches: 524288
+
+# --- Storage ---
+k3s_local_path_provisioner_enabled: false # false (default), k3s built-in local-path
+
+# --- In-Cluster Registry Mirror ---
+k3s_spegel_enabled: false # false (default), k3s embedded registry mirror

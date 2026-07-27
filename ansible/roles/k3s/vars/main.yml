@@ -1,2 +1,46 @@
 ---
-# vars file for cluster-setup
+# Values the role derives for itself. Nothing here is user-facing: each entry
+# is either fixed by k3s or computed from the variables in defaults/main.yml.
+
+# Where common.yml puts the get.k3s.io script.
+k3s_install_script: /tmp/k3s-install.sh
+
+# k3s applies every manifest it finds in this directory on startup. This is
+# how the Cilium HelmChart CR reaches the API server without helm on the node.
+k3s_manifests_dir: /var/lib/rancher/k3s/server/manifests
+
+# The Cilium manifest, and - with `.skip` appended - the marker that tells k3s
+# to leave it alone. See tasks/cilium.yml.
+k3s_cilium_manifest: "{{ k3s_manifests_dir }}/cilium.yaml"
+
+# The unit the install script lays down, and the sub-command it runs.
+# INSTALL_K3S_EXEC=agent is what makes the script write k3s-agent.service
+# instead of k3s.service.
+k3s_service_name: "{{ 'k3s' if k3s_node_role == 'control' else 'k3s-agent' }}"
+k3s_install_exec: "{{ 'server' if k3s_node_role == 'control' else 'agent' }}"
+
+# The name k3s registers this node under: k3s lowercases the hostname.
+k3s_node_name: "{{ ansible_hostname | lower }}"
+
+# Config keys config.yaml.j2 writes on its own. A pass-through argument that
+# carries one of these is dropped rather than written a second time.
+k3s_config_owned_keys:
+  - cluster-init
+  - server
+  - token
+  - snapshotter
+  - write-kubeconfig-mode
+  - embedded-registry
+  - flannel-backend
+  - disable-network-policy
+  - disable-kube-proxy
+
+# Config keys k3s accepts more than once. config.yaml.j2 renders these as a
+# YAML list and merges the matching role variable with the pass-through
+# arguments that carry the same key.
+k3s_config_list_keys:
+  - node-label
+  - node-taint
+  - tls-san
+  - kubelet-arg
+  - disable

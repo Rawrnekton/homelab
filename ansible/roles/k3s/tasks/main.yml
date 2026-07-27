@@ -1,9 +1,54 @@
 ---
-# tasks file for cluster-setup
-- name: Install K3s on control plane nodes
-  ansible.builtin.include_tasks: control-plane.yml
-  when: inventory_hostname in groups['argo']
+- name: Validate variables
+  ansible.builtin.import_tasks: validate-variables.yml
 
-- name: Install rancher and dependencies on the first control plane
-  ansible.builtin.include_tasks: rancher.yml
-  when: inventory_hostname in groups['argo'][0]
+- name: Remove k3s from this node
+  ansible.builtin.include_tasks: uninstall.yml
+  when: k3s_state == 'absent'
+
+- name: Run pre-flight checklist
+  ansible.builtin.import_tasks: pre-flight-checklist.yml
+  when: k3s_state == 'present'
+
+- name: Run common tasks
+  ansible.builtin.import_tasks: common.yml
+  when: k3s_state == 'present'
+
+# The bootstrap node has to finish before the others start: they read its join
+# token out of its facts. That is why these are two separate includes and not
+# one - Ansible finishes an include for every host before it moves on.
+- name: Bootstrap the first control-plane node
+  ansible.builtin.include_tasks: control-init.yml
+  when:
+    - k3s_state == 'present'
+    - inventory_hostname == k3s_first_control_node
+
+# Before the join, not after: a node that joins a cluster without a CNI stays
+# NotReady. The chart also has to be in place before any workload lands.
+- name: Install Cilium on the bootstrap node
+  ansible.builtin.include_tasks: cilium.yml
+  when:
+    - k3s_state == 'present'
+    - k3s_cni == 'cilium'
+    - inventory_hostname == k3s_first_control_node
+
+- name: Join the remaining nodes
+  ansible.builtin.include_tasks: install.yml
+  when:
+    - k3s_state == 'present'
+    - inventory_hostname != k3s_first_control_node
+
+- name: Run post-install tasks
+  ansible.builtin.include_tasks: post-install.yml
+  when:
+    - k3s_state == 'present'
+    - inventory_hostname == k3s_first_control_node
+
+# include_tasks, not import_tasks: verify.yml delegates a task to
+# k3s_first_control_node, and Ansible templates `delegate_to` BEFORE it
+# evaluates `when`. With an import the delegation would be resolved even on
+# the k3s_state: absent path, where pre-flight never ran and that fact does
+# not exist. A dynamic include is skipped whole.
+- name: Verify the installation
+  ansible.builtin.include_tasks: verify.yml
+  when: k3s_state == 'present'

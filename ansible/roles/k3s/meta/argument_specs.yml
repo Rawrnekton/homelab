@@ -1,0 +1,188 @@
+---
+# Role argument specification — the schema/contract for this role's variables.
+#
+# Validated automatically before any task in `main` runs (fail fast on bad
+# input), and rendered as documentation by `ansible-doc -t role ... k3s`.
+#
+# Prose descriptions live HERE (single source of truth); defaults/main.yml
+# holds the actual values with only terse orienting comments.
+argument_specs:
+  main:
+    short_description: Provision a bare k3s cluster node.
+    description:
+      - Installs and configures a single k3s node — either a control-plane
+        (server) or a worker (agent) — selected by C(k3s_node_role).
+    author:
+      - Jonathan Gerdes
+    options:
+      k3s_state:
+        type: str
+        required: false
+        default: present
+        choices:
+          - present
+          - absent
+        description:
+          - The desired state of k3s on this node.
+          - C(present) installs k3s.
+          - C(absent) removes k3s.
+      k3s_node_role:
+        type: str
+        required: false
+        default: control
+        choices:
+          - control
+          - worker
+        description:
+          - Role this node plays in the cluster.
+          - C(control) installs a k3s server (control-plane).
+          - C(worker) installs a k3s agent that joins an existing cluster.
+      k3s_release_channel:
+        type: str
+        description: >-
+          K3s release channel to track (e.g. "stable", "latest").
+          Mutually exclusive with k3s_version.
+      k3s_version:
+        type: str
+        description: >-
+          K3s version to install or to upgrade to (e.g. "v1.36.2+k3s1").
+          Mutually exclusive with k3s_release_channel.
+      k3s_upgrade:
+        type: bool
+        required: false
+        default: false
+        description: >-
+          Re-run the installation script if set to true.
+          This is mainly used to either reinstall the server or upgrade.
+      k3s_snapshotter:
+        type: str
+        required: false
+        choices:
+          - overlayfs
+          - native
+          - fuse-overlayfs
+          - stargz
+        description:
+          - The containerd snapshotter that k3s uses for container images.
+          - When unset, k3s keeps its own default (C(overlayfs)).
+          - Set C(native) when the node itself runs in a container, because
+            overlayfs does not work when it is nested.
+      k3s_cni:
+        type: str
+        required: false
+        default: flannel
+        choices:
+          - flannel
+          - cilium
+        description:
+          - The CNI the cluster should be using.
+          - C(flannel) is the built in CNI.
+          - C(cilium) switches flannel and the built-in network policy off and
+            installs Cilium from a HelmChart CR in the manifests directory of
+            the bootstrap node, before any other node joins.
+      k3s_cilium_version:
+        type: str
+        required: false
+        description:
+          - The Chart version of cilium to install.
+          - Only valid when C(k3s_cni) is set to C(cilium).
+          - Cilium is installed ONCE, when the cluster is bootstrapped. After
+            the chart is up the role writes a C(.skip) marker next to the
+            manifest and stops managing it, so that a GitOps tool can take the
+            chart over. A later change of this value therefore does not
+            upgrade a running cluster.
+      k3s_cilium_values:
+        type: dict
+        required: false
+        description:
+          - A dictionary of Helm values for the HelmChart CR.
+          - Only valid when C(k3s_cni) is set to C(cilium).
+          - Read once, at bootstrap; see C(k3s_cilium_version).
+      k3s_kube_proxy_replacement:
+        type: bool
+        required: false
+        description: >-
+          Whether Cilium fully replaces kube-proxy.
+          Sets the related Cilium Helm value and adds C(disable-kube-proxy) to
+          the k3s config.
+          Only valid when k3s_cni is set to cilium.
+      k3s_tls_san:
+        type: list
+        elements: str
+        required: false
+        description: >-
+          Additional hostnames or IPv4/IPv6 addresses as Subject Alternative Names on the TLS cert.
+      k3s_node_labels:
+        type: list
+        elements: str
+        required: false
+        description: >-
+          List of labels to apply to this node in C(key=value) format.
+      k3s_node_taints:
+        type: list
+        elements: str
+        required: false
+        description: >-
+          List of taints to apply to this node in C(key=value:Effect) format.
+          Valid effects are C(NoSchedule), C(PreferNoSchedule), and C(NoExecute).
+      k3s_kubelet_args:
+        type: list
+        elements: str
+        required: false
+        description:
+          - Extra arguments passed through to the kubelet.
+          - Written WITHOUT the leading dashes, in C(key) or C(key=value)
+            format (e.g. C(max-pods=110)).
+      k3s_extra_server_args:
+        type: list
+        elements: str
+        required: false
+        description:
+          - Extra arguments passed through to C(k3s server).
+          - Written WITH the leading dashes, in C(--flag) or C(--flag=value)
+            format (e.g. C(--etcd-expose-metrics=true)). An argument that
+            names a key the role already writes to C(config.yaml) is merged
+            into that key.
+          - Only valid when C(k3s_node_role) is C(control).
+      k3s_extra_agent_args:
+        type: list
+        elements: str
+        required: false
+        description:
+          - Extra arguments passed through to C(k3s agent).
+          - Written WITH the leading dashes, in C(--flag) or C(--flag=value)
+            format (e.g. C(--node-ip=10.10.0.5)). An argument that names a key
+            the role already writes to C(config.yaml) is merged into that key.
+      k3s_kubeconfig_fetch:
+        type: bool
+        required: false
+        default: false
+        description: >-
+          Whether to fetch the kubeconfig from the control-plane node to the Ansible controller.
+      k3s_kubeconfig_dest:
+        type: path
+        required: false
+        description: >-
+          Local path on the Ansible controller where the kubeconfig is written.
+          Required when C(k3s_kubeconfig_fetch) is C(true).
+      k3s_sysctl_settings:
+        type: dict
+        required: false
+        description: >-
+          Dictionary of sysctl key/value pairs to apply on the node
+          (e.g. C(fs.inotify.max_user_instances: 512)).
+      k3s_local_path_provisioner_enabled:
+        type: bool
+        required: false
+        default: false
+        description: >-
+          Whether to enable the k3s built-in local-path provisioner.
+      k3s_spegel_enabled:
+        type: bool
+        required: false
+        default: false
+        description:
+          - Whether to enable Spegel, the k3s embedded OCI registry mirror.
+          - Switches C(embedded-registry) on in the server configuration and
+            writes a C(registries.yaml) that mirrors every registry through
+            it on every node.

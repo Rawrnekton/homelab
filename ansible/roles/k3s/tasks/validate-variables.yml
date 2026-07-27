@@ -1,0 +1,174 @@
+---
+- name: Either k3s_version or k3s_release_channel must be set
+  ansible.builtin.assert:
+    that:
+      - not (k3s_version is defined and k3s_release_channel is defined)
+    fail_msg: >-
+      k3s_version ('{{ k3s_version | default("unset") }}') and
+      k3s_release_channel ('{{ k3s_release_channel | default("unset") }}') are
+      mutually exclusive. Set none, one or the other, not both.
+
+- name: Validate k3s_release_channel value
+  ansible.builtin.assert:
+    that:
+      - k3s_release_channel is match('^(stable|latest|testing|v1\.\d+)$')
+    fail_msg: >-
+      Invalid k3s_release_channel '{{ k3s_release_channel }}'. Must be 'stable',
+      'latest', 'testing', or a minor version channel (e.g. 'v1.30').
+  when:
+    - k3s_release_channel is defined
+    - k3s_version is not defined
+
+# k3s_version is not getting validated here, running the install script with an incorrect value will
+# print a clear error message
+# any validation on that here will be at best outdated very fast
+
+- name: Validate if flannel is set, that the cilium vars are not defined
+  ansible.builtin.assert:
+    that:
+      - k3s_cilium_values is not defined
+      - k3s_cilium_version is not defined
+      - k3s_kube_proxy_replacement is not defined
+    fail_msg: >-
+      k3s_cilium_values, k3s_cilium_version and k3s_kube_proxy_replacement need
+      to be unset when using flannel. This is here to prevent copy & paste
+      errors.
+  when: k3s_cni == "flannel"
+
+- name: Validate cilium version
+  ansible.builtin.assert:
+    that:
+      - k3s_cilium_version is defined
+      - k3s_cilium_version is
+        match('^\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?$')
+    fail_msg: >-
+      k3s_cilium_version needs to be defined and a valid semver when k3s_cni is
+      set to cilium.
+  when: k3s_cni == "cilium"
+
+- name: Validate cilium values
+  ansible.builtin.assert:
+    that:
+      - k3s_cilium_values is mapping
+    fail_msg: >-
+      k3s_cilium_values must be a dict when defined.
+  when:
+    - k3s_cni == "cilium"
+    - k3s_cilium_values is defined
+
+- name: Validate k3s_tls_san
+  vars:
+    hostname_pattern: '^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+    invalid_sans: >-
+      {{ k3s_tls_san | reject('match', hostname_pattern) | list
+         | difference(k3s_tls_san | ansible.utils.ipaddr | default([], true)) }}
+  ansible.builtin.assert:
+    that:
+      - invalid_sans | length == 0
+    fail_msg: >-
+      k3s_tls_san needs to be a list of hostnames or IPv4/IPv6 addresses. Got:
+      {{ invalid_sans }}
+  when:
+    - k3s_tls_san is defined
+
+- name: Validate k3s_node_labels format
+  ansible.builtin.assert:
+    that:
+      - k3s_node_labels | reject('match', '^[a-zA-Z0-9_./-]+=.*$') | list |
+        length == 0
+    fail_msg: >-
+      Each item in k3s_node_labels must be in key=value format. Got: {{
+      k3s_node_labels | reject('match', '^[a-zA-Z0-9_./-]+=.*$') | list }}
+  when:
+    - k3s_node_labels is defined
+
+- name: Validate k3s_node_taints format
+  ansible.builtin.assert:
+    that:
+      - k3s_node_taints | reject('match',
+        '^[a-zA-Z0-9_./-]+=[^:]*:(NoSchedule|PreferNoSchedule|NoExecute)$') |
+        list | length == 0
+    fail_msg: >-
+      Each item in k3s_node_taints must be in key=value:Effect format where
+      Effect is NoSchedule, PreferNoSchedule, or NoExecute. Got: {{
+      k3s_node_taints | reject('match',
+      '^[a-zA-Z0-9_./-]+=[^:]*:(NoSchedule|PreferNoSchedule|NoExecute)$') | list
+      }}
+  when:
+    - k3s_node_taints is defined
+
+# k3s takes kubelet arguments WITHOUT the leading dashes ("max-pods=110"),
+# and server/agent arguments WITH them ("--etcd-expose-metrics=true"). Mixing
+# the two forms up is the mistake this catches.
+- name: Validate k3s_kubelet_args format
+  vars:
+    invalid_kubelet_args: >-
+      {{ k3s_kubelet_args | reject('match', '^[a-zA-Z0-9][a-zA-Z0-9-]*(=.*)?$')
+      | list }}
+  ansible.builtin.assert:
+    that:
+      - invalid_kubelet_args | length == 0
+    fail_msg: >-
+      Each item in k3s_kubelet_args must be a kubelet flag without the leading
+      dashes, in key or key=value format (e.g. "max-pods=110"). Got: {{
+      invalid_kubelet_args }}
+  when:
+    - k3s_kubelet_args is defined
+
+- name: Validate k3s_extra_server_args format
+  vars:
+    invalid_server_args: >-
+      {{ k3s_extra_server_args | reject('match',
+      '^--[a-zA-Z0-9][a-zA-Z0-9-]*(=.*)?$') | list }}
+  ansible.builtin.assert:
+    that:
+      - invalid_server_args | length == 0
+    fail_msg: >-
+      Each item in k3s_extra_server_args must be a k3s server flag that starts
+      with "--", in --flag or --flag=value format. Got: {{ invalid_server_args
+      }}
+  when:
+    - k3s_extra_server_args is defined
+
+- name: Validate k3s_extra_agent_args format
+  vars:
+    invalid_agent_args: >-
+      {{ k3s_extra_agent_args | reject('match',
+      '^--[a-zA-Z0-9][a-zA-Z0-9-]*(=.*)?$') | list }}
+  ansible.builtin.assert:
+    that:
+      - invalid_agent_args | length == 0
+    fail_msg: >-
+      Each item in k3s_extra_agent_args must be a k3s agent flag that starts
+      with "--", in --flag or --flag=value format. Got: {{ invalid_agent_args }}
+  when:
+    - k3s_extra_agent_args is defined
+
+- name: Validate k3s_extra_server_args is only set on control nodes
+  ansible.builtin.assert:
+    that:
+      - k3s_node_role == "control"
+    fail_msg: >-
+      k3s_extra_server_args is only valid on control-plane nodes (k3s_node_role
+      == "control"), but k3s_node_role is '{{ k3s_node_role }}'.
+  when:
+    - k3s_extra_server_args is defined
+
+- name: Validate k3s_kubeconfig_dest is set when fetch is enabled
+  ansible.builtin.assert:
+    that:
+      - k3s_kubeconfig_dest is defined
+      - k3s_kubeconfig_dest | length > 0
+    fail_msg: >-
+      k3s_kubeconfig_dest must be set when k3s_kubeconfig_fetch is true.
+  when:
+    - k3s_kubeconfig_fetch | default(false)
+
+- name: Validate k3s_sysctl_settings is a dict
+  ansible.builtin.assert:
+    that:
+      - k3s_sysctl_settings is mapping
+    fail_msg: >-
+      k3s_sysctl_settings must be a dictionary of sysctl key/value pairs.
+  when:
+    - k3s_sysctl_settings is defined
