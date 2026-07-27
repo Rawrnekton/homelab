@@ -1,0 +1,87 @@
+---
+# Install, configure and start k3s on this node.
+#
+# Shared by every node: the bootstrap server, a joining server and an agent.
+# What differs between them comes out of vars/main.yml (k3s_service_name,
+# k3s_install_exec) and out of config.yaml.j2, which decides on its own
+# whether this node initialises the cluster or joins one.
+#
+# Order matters: the configuration has to be on disk before the install
+# script runs, because the script starts from it.
+- name: Write the k3s configuration
+  ansible.builtin.import_tasks: write-config.yml
+
+# Cordon and drain only before an upgrade. A plain configuration change goes
+# through the handler, which restarts the node without draining it: a k3s
+# restart is short, and draining on every change would move every workload
+# twice for nothing.
+#
+# The drain is delegated to the first control node, because a worker has no
+# API of its own to talk to.
+- name: Cordon and drain this node before the upgrade
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl drain {{ k3s_node_name }}
+      --ignore-daemonsets --delete-emptydir-data --force --timeout=120s
+  delegate_to: "{{ k3s_first_control_node }}"
+  changed_when: true
+  throttle: 1
+  when:
+    - k3s_upgrade | bool
+    - k3s_already_running | bool
+
+- name: Run the k3s install script
+  ansible.builtin.command:
+    cmd: "{{ k3s_install_script }}"
+  environment:
+    # default(omit) removes the key from the child environment entirely,
+    # which is what the install script tests for.
+    INSTALL_K3S_CHANNEL: "{{ k3s_release_channel | default(omit) }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version | default(omit) }}"
+    INSTALL_K3S_SKIP_START: "true"
+    INSTALL_K3S_EXEC: "{{ k3s_install_exec }}"
+  when: not (k3s_already_running | bool) or k3s_upgrade
+  changed_when: true
+
+- name: Enable and start k3s
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# `state: started` does nothing to a service that already runs, so an upgrade
+# needs an explicit restart to pick up the new binary. The handler cannot do
+# it: it fires at the end of the play, long after the nodes behind this one
+# have been upgraded too.
+- name: Restart k3s onto the freshly installed version
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: restarted
+  when:
+    - k3s_upgrade | bool
+    - k3s_already_running | bool
+
+- name: Wait for the k3s API to report ready
+  # kubectl through `command`: k3s turns anonymous authentication off, so the
+  # /readyz endpoint answers 401 to an unauthenticated request. `k3s kubectl`
+  # uses the node's own kubeconfig. kubernetes.core is no help either - it
+  # needs the python kubernetes client on the target, which this role does not
+  # install.
+  ansible.builtin.command: k3s kubectl get --raw /readyz
+  register: k3s_readyz
+  changed_when: false
+  until: k3s_readyz is success
+  retries: 30
+  delay: 10
+  when: k3s_node_role == 'control'
+
+- name: Uncordon this node after the upgrade
+  ansible.builtin.command:
+    cmd: k3s kubectl uncordon {{ k3s_node_name }}
+  delegate_to: "{{ k3s_first_control_node }}"
+  changed_when: true
+  throttle: 1
+  when:
+    - k3s_upgrade | bool
+    - k3s_already_running | bool

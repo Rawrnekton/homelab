@@ -1,0 +1,86 @@
+---
+# The role's own smoke test. Read-only, and safe on a cluster that is already
+# up: adding a node re-runs the whole role over the nodes that already work.
+- name: Read the state of the k3s unit
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+  register: k3s_verify_unit
+
+- name: Assert the k3s unit is enabled and running
+  ansible.builtin.assert:
+    that:
+      - k3s_verify_unit.status.ActiveState == 'active'
+      - k3s_verify_unit.status.UnitFileState == 'enabled'
+    fail_msg: >-
+      {{ k3s_service_name }} is {{ k3s_verify_unit.status.ActiveState }} and
+      {{ k3s_verify_unit.status.UnitFileState }} on this node. It must be
+      active and enabled.
+
+- name: Assert the API server reports ready
+  # See tasks/install.yml for why this is `k3s kubectl` and not a plain
+  # request against /readyz.
+  ansible.builtin.command: k3s kubectl get --raw /readyz
+  register: k3s_verify_readyz
+  changed_when: false
+  until: k3s_verify_readyz is success
+  retries: 30
+  delay: 10
+  when: k3s_node_role == 'control'
+
+# kubectl through `command`: kubernetes.core needs the python kubernetes
+# client on the target, and this role does not install one.
+#
+# Two waits, not one, because the two failures mean different things: a node
+# that never registers has a token, address or firewall problem, while a node
+# that registers and stays NotReady has a CNI problem.
+- name: Count the nodes that registered with the cluster
+  ansible.builtin.command: k3s kubectl get nodes --no-headers
+  register: k3s_verify_nodes
+  changed_when: false
+  delegate_to: "{{ k3s_first_control_node }}"
+  run_once: true
+  until: k3s_verify_nodes.stdout_lines | length >= ansible_play_hosts | length
+  retries: 30
+  delay: 10
+
+- name: Assert every node of the play joined the cluster
+  ansible.builtin.assert:
+    that:
+      - k3s_verify_nodes.stdout_lines | length >= ansible_play_hosts | length
+    fail_msg: >-
+      The play holds {{ ansible_play_hosts | length }} nodes, but only
+      {{ k3s_verify_nodes.stdout_lines | length }} registered with the
+      cluster:
+      {{ k3s_verify_nodes.stdout }}
+  run_once: true
+
+# A node is Ready once the kubelet finds a working CNI. With flannel that is
+# seconds after the join; with Cilium the DaemonSet has to land on the node
+# first, and tasks/cilium.yml has already waited for it on the bootstrap node.
+- name: Wait for every node of the play to report Ready
+  ansible.builtin.command: k3s kubectl get nodes --no-headers
+  register: k3s_verify_ready
+  changed_when: false
+  delegate_to: "{{ k3s_first_control_node }}"
+  run_once: true
+  until:
+    - k3s_verify_ready.stdout_lines | length >= ansible_play_hosts | length
+    - "'NotReady' not in k3s_verify_ready.stdout"
+  retries: 30
+  delay: 10
+  # A retry loop that runs out of attempts fails the task, whatever
+  # failed_when says. Ignoring it here is what lets the assert below report
+  # the real problem instead of "Timeout".
+  ignore_errors: true
+
+- name: Assert every node of the play is Ready
+  ansible.builtin.assert:
+    that:
+      - "'NotReady' not in k3s_verify_ready.stdout"
+    fail_msg: >-
+      A node registered with the cluster but never became Ready. That is the
+      CNI: {{ 'Cilium is the CNI here, so look at the cilium DaemonSet in
+      kube-system' if k3s_cni == 'cilium' else 'look at the flannel setup and
+      at the kubelet log' }}. Nodes:
+      {{ k3s_verify_ready.stdout }}
+  run_once: true
