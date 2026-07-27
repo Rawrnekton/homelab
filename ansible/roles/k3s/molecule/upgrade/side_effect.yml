@@ -1,0 +1,51 @@
+---
+# Side effect: two more converges on the newer channel, once with the upgrade
+# flag off and once with it on. Each step records the installed version, and
+# verify.yml compares the three records.
+- name: Record the version the cluster started on
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the installed k3s version
+      ansible.builtin.command: k3s --version
+      register: k3s_version_before
+      changed_when: false
+
+    - name: Save the starting version
+      ansible.builtin.copy:
+        content: "{{ k3s_version_before.stdout_lines[0] }}"
+        dest: /var/tmp/molecule-k3s-version-before
+        mode: "0644"
+
+- name: Re-converge on the newer channel with the upgrade flag off
+  hosts: all
+  become: true
+  vars:
+    k3s_release_channel: "{{ molecule_upgrade_to_channel }}"
+    k3s_upgrade: false
+  roles:
+    - role: k3s
+
+- name: Record the version after the run without the flag
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the installed k3s version
+      ansible.builtin.command: k3s --version
+      register: k3s_version_no_flag
+      changed_when: false
+
+    - name: Save the version after the run without the flag
+      ansible.builtin.copy:
+        content: "{{ k3s_version_no_flag.stdout_lines[0] }}"
+        dest: /var/tmp/molecule-k3s-version-no-flag
+        mode: "0644"
+
+- name: Re-converge on the newer channel with the upgrade flag on
+  hosts: all
+  become: true
+  vars:
+    k3s_release_channel: "{{ molecule_upgrade_to_channel }}"
+    k3s_upgrade: true
+  roles:
+    - role: k3s

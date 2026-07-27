@@ -1,0 +1,40 @@
+---
+# Verify: k3s_state absent (molecule/uninstall).
+#
+# Runs after side_effect.yml removed k3s from both nodes.
+- name: Verify k3s is gone
+  hosts: all
+  become: true
+  tasks:
+    - name: Check every path k3s owns
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: leftovers
+      loop:
+        - /usr/local/bin/k3s
+        - /etc/rancher/k3s
+        - /var/lib/rancher/k3s
+        - /etc/systemd/system/k3s.service
+        - /etc/systemd/system/k3s-agent.service
+        - /usr/local/bin/k3s-uninstall.sh
+        - /usr/local/bin/k3s-agent-uninstall.sh
+
+    - name: Assert nothing was left behind
+      vars:
+        remaining: "{{ leftovers.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+      ansible.builtin.assert:
+        that:
+          - remaining | length == 0
+        fail_msg: >-
+          k3s_state is absent, but these paths still exist: {{ remaining }}
+
+    - name: Read the list of known services
+      ansible.builtin.service_facts:
+
+    - name: Assert no k3s unit is left
+      ansible.builtin.assert:
+        that:
+          - "'k3s.service' not in ansible_facts.services"
+          - "'k3s-agent.service' not in ansible_facts.services"
+        fail_msg: >-
+          A k3s systemd unit is still registered after the uninstall.

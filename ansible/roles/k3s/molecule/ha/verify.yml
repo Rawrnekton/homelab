@@ -1,0 +1,157 @@
+---
+# Verify: three control-plane nodes (molecule/ha).
+#
+# Runs after side_effect.yml, so the state under test is "converged once, then
+# converged again with one more TLS SAN".
+- name: Verify each control-plane node
+  hosts: all
+  become: true
+  tasks:
+    # -- Config shape ----------------------------------------------------
+    - name: Read rendered k3s config
+      ansible.builtin.slurp:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_raw
+
+    - name: Check config file permissions
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_stat
+
+    - name: Assert config file is not world/group readable
+      ansible.builtin.assert:
+        that:
+          - k3s_config_stat.stat.mode == '0600'
+
+    - name: Assert the bootstrap node initialises its own cluster
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode }}"
+      ansible.builtin.assert:
+        that:
+          - "'cluster-init: true' in k3s_config"
+          - "'server:' not in k3s_config"
+        fail_msg: "Bootstrap node config.yaml does not match expected shape:\n{{ k3s_config }}"
+      when: inventory_hostname == 'k3s-bootstrap'
+
+    - name: Assert joining servers point at the bootstrap node and carry a token
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode }}"
+        bootstrap_address: "{{ hostvars['k3s-bootstrap']['ansible_default_ipv4']['address'] }}"
+      ansible.builtin.assert:
+        that:
+          - "'cluster-init' not in k3s_config"
+          - "'server: \"https://' + bootstrap_address + ':6443\"' in k3s_config"
+          - "'token: ' in k3s_config"
+        fail_msg: "Joining node config.yaml does not point at the bootstrap node:\n{{ k3s_config }}"
+      when: inventory_hostname != 'k3s-bootstrap'
+
+    # -- Service state ---------------------------------------------------
+    - name: Read the k3s service state
+      ansible.builtin.systemd:
+        name: k3s
+      register: k3s_service
+
+    - name: Assert every control node runs a k3s server
+      ansible.builtin.assert:
+        that:
+          - k3s_service.status.ActiveState == 'active'
+          - k3s_service.status.UnitFileState == 'enabled'
+
+    - name: Assert no node runs an agent as well
+      ansible.builtin.stat:
+        path: /etc/systemd/system/k3s-agent.service
+      register: agent_unit
+
+    - name: Assert the agent unit is absent on a control node
+      ansible.builtin.assert:
+        that:
+          - not agent_unit.stat.exists
+        fail_msg: "A control node has a k3s-agent unit; it must only run k3s.service"
+
+    # -- Config-change restart -------------------------------------------
+    #
+    # `throttle: 1` (one node at a time) cannot be read back after the fact.
+    # What is observable is that every node did restart, and that the cluster
+    # kept its quorum - the last play checks the second half.
+    - name: Read the start time recorded before the config change
+      ansible.builtin.slurp:
+        path: /var/tmp/molecule-k3s-active-before
+      register: active_before_raw
+
+    - name: Assert the config change restarted the service
+      vars:
+        active_before: "{{ active_before_raw['content'] | b64decode | trim }}"
+        active_now: "{{ k3s_service.status.ActiveEnterTimestamp }}"
+      ansible.builtin.assert:
+        that:
+          - active_now != active_before
+        fail_msg: >-
+          k3s did not restart after the TLS SAN changed. The service has been
+          up since {{ active_before }} on this node. A config change must
+          notify a rolling-restart handler.
+
+    # -- TLS SANs --------------------------------------------------------
+    - name: Read the API server serving certificate
+      community.crypto.x509_certificate_info:
+        path: /var/lib/rancher/k3s/server/tls/serving-kube-apiserver.crt
+      register: apiserver_cert
+
+    - name: Assert both TLS SANs are on the certificate
+      ansible.builtin.assert:
+        that:
+          - "'DNS:k3s-api.molecule.test' in apiserver_cert.subject_alt_name"
+          - "'DNS:k3s-api-added-later.molecule.test' in apiserver_cert.subject_alt_name"
+        fail_msg: >-
+          k3s_tls_san did not reach the API server certificate. SANs on the
+          certificate: {{ apiserver_cert.subject_alt_name }}
+
+- name: Verify the cluster kept its quorum
+  hosts: k3s-bootstrap
+  become: true
+  tasks:
+    - name: Wait for all three nodes to report Ready
+      ansible.builtin.command: k3s kubectl get nodes --no-headers
+      register: node_list
+      changed_when: false
+      until:
+        - node_list.stdout_lines | length == 3
+        - "'NotReady' not in node_list.stdout"
+      retries: 24
+      delay: 10
+
+    - name: Assert all three nodes are present and Ready
+      ansible.builtin.assert:
+        that:
+          - node_list.stdout_lines | length == 3
+          - "'NotReady' not in node_list.stdout"
+        fail_msg: "Expected 3 Ready nodes, got:\n{{ node_list.stdout }}"
+
+    # Label selectors rather than jsonpath: the escaped dots a
+    # node-role.kubernetes.io/... jsonpath needs do not survive the command
+    # module's shell-less argument splitting.
+    - name: List the nodes that carry the control-plane role
+      ansible.builtin.command: >-
+        k3s kubectl get nodes
+        -l node-role.kubernetes.io/control-plane=true -o name
+      register: control_plane_nodes
+      changed_when: false
+
+    - name: Assert all three nodes joined the control plane
+      ansible.builtin.assert:
+        that:
+          - control_plane_nodes.stdout_lines | length == 3
+        fail_msg: >-
+          Unexpected control-plane nodes: {{ control_plane_nodes.stdout_lines }}
+
+    - name: Read the etcd membership
+      ansible.builtin.command: >-
+        k3s kubectl get nodes
+        -l node-role.kubernetes.io/etcd=true --no-headers
+      register: etcd_members
+      changed_when: false
+
+    - name: Assert all three nodes are embedded etcd members
+      ansible.builtin.assert:
+        that:
+          - etcd_members.stdout_lines | length == 3
+        fail_msg: "Expected 3 etcd members, got:\n{{ etcd_members.stdout }}"

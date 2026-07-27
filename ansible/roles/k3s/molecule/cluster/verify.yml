@@ -1,0 +1,148 @@
+---
+# Verify: three control-plane nodes and two workers (molecule/cluster).
+#
+# molecule's built-in idempotence step already covers "does a second converge
+# report changed=0" - no separate assertion needed here.
+#
+# The role picks the bootstrap node itself: pre-flight-checklist.yml takes the
+# first control host out of ansible_play_hosts. The platform names are chosen
+# so that k3s-bootstrap wins that pick under any inventory ordering.
+#
+# No taint assertions here. Auto-tainting control nodes when a worker is
+# present is not a feature of this role - k3s_node_taints is a plain per-node
+# list, and it is covered in the `features` scenario.
+- name: Verify per-node service and config shape
+  hosts: all
+  become: true
+  tasks:
+    # -- Config file -----------------------------------------------------
+    - name: Read rendered k3s config
+      ansible.builtin.slurp:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_raw
+
+    - name: Check config file permissions
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_stat
+
+    - name: Assert config file is not world/group readable
+      ansible.builtin.assert:
+        that:
+          - k3s_config_stat.stat.mode == '0600'
+
+    - name: Assert the bootstrap node initialises its own cluster
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode }}"
+      ansible.builtin.assert:
+        that:
+          - "'cluster-init: true' in k3s_config"
+          - "'server:' not in k3s_config"
+        fail_msg: "Bootstrap node config.yaml does not match expected shape:\n{{ k3s_config }}"
+      when: inventory_hostname == 'k3s-bootstrap'
+
+    - name: Assert joining nodes point at the bootstrap node and carry a token
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode }}"
+        bootstrap_address: "{{ hostvars['k3s-bootstrap']['ansible_default_ipv4']['address'] }}"
+      ansible.builtin.assert:
+        that:
+          - "'cluster-init' not in k3s_config"
+          - "'server: \"https://' + bootstrap_address + ':6443\"' in k3s_config"
+          - "'token: ' in k3s_config"
+        fail_msg: "Joining node config.yaml does not point at the bootstrap node:\n{{ k3s_config }}"
+      when: inventory_hostname != 'k3s-bootstrap'
+
+    # -- Service state ---------------------------------------------------
+    - name: Check k3s server service state (control nodes)
+      ansible.builtin.systemd:
+        name: k3s
+      register: k3s_server_service
+      when: "'control' in group_names"
+
+    - name: Assert k3s server service is enabled and running
+      ansible.builtin.assert:
+        that:
+          - k3s_server_service.status.ActiveState == 'active'
+          - k3s_server_service.status.UnitFileState == 'enabled'
+      when: "'control' in group_names"
+
+    - name: Check k3s agent service state (worker nodes)
+      ansible.builtin.systemd:
+        name: k3s-agent
+      register: k3s_agent_service
+      when: "'worker' in group_names"
+
+    - name: Assert k3s agent service is enabled and running
+      ansible.builtin.assert:
+        that:
+          - k3s_agent_service.status.ActiveState == 'active'
+          - k3s_agent_service.status.UnitFileState == 'enabled'
+      when: "'worker' in group_names"
+
+    - name: Check for a server unit on the workers
+      ansible.builtin.stat:
+        path: /etc/systemd/system/k3s.service
+      register: worker_server_unit
+      when: "'worker' in group_names"
+
+    - name: Assert no k3s server unit on the workers
+      ansible.builtin.assert:
+        that:
+          - not worker_server_unit.stat.exists
+        fail_msg: "Worker node has a k3s server unit; it must only run k3s-agent"
+      when: "'worker' in group_names"
+
+- name: Verify the cluster formed correctly
+  hosts: k3s-bootstrap
+  become: true
+  tasks:
+    - name: Wait for all five nodes to report Ready
+      ansible.builtin.command: k3s kubectl get nodes --no-headers
+      register: node_list
+      changed_when: false
+      until:
+        - node_list.stdout_lines | length == 5
+        - "'NotReady' not in node_list.stdout"
+      retries: 30
+      delay: 10
+
+    - name: Assert all five nodes are present and Ready
+      ansible.builtin.assert:
+        that:
+          - node_list.stdout_lines | length == 5
+          - "'NotReady' not in node_list.stdout"
+        fail_msg: "Expected 5 Ready nodes, got:\n{{ node_list.stdout }}"
+
+    # Label selectors rather than jsonpath: the escaped dots a
+    # node-role.kubernetes.io/... jsonpath needs do not survive the
+    # command module's shell-less argument splitting.
+    - name: List the nodes that carry the control-plane role
+      ansible.builtin.command: >-
+        k3s kubectl get nodes
+        -l node-role.kubernetes.io/control-plane=true -o name
+      register: control_plane_nodes
+      changed_when: false
+
+    - name: Assert the three control nodes joined the control plane and the workers did not
+      ansible.builtin.assert:
+        that:
+          - control_plane_nodes.stdout_lines | length == 3
+          - "'node/k3s-bootstrap' in control_plane_nodes.stdout_lines"
+          - "'node/k3s-control2' in control_plane_nodes.stdout_lines"
+          - "'node/k3s-control3' in control_plane_nodes.stdout_lines"
+        fail_msg: >-
+          Unexpected control-plane nodes: {{ control_plane_nodes.stdout_lines }}
+
+    - name: Read the etcd membership of the control-plane nodes
+      ansible.builtin.command: >-
+        k3s kubectl get nodes
+        -l node-role.kubernetes.io/etcd=true --no-headers
+      register: etcd_members
+      changed_when: false
+
+    - name: Assert all three control nodes are embedded etcd members
+      ansible.builtin.assert:
+        that:
+          - etcd_members.stdout_lines | length == 3
+        fail_msg: "Expected 3 etcd members, got:\n{{ etcd_members.stdout }}"

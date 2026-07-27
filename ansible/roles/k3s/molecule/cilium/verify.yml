@@ -1,0 +1,247 @@
+---
+# Verify: Cilium CNI (molecule/cilium).
+#
+# The dataplane is in scope here. See the header of molecule.yml for the
+# kernel surface the container needs for that, and what it costs.
+#
+# Same tally mechanism as the `features` scenario: every check runs, and the
+# report play at the end fails once with the whole table.
+- name: Verify the Cilium switch
+  hosts: all
+  become: true
+  tasks:
+    # -- k3s configuration -----------------------------------------------
+    - name: Read rendered k3s config
+      ansible.builtin.slurp:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_raw
+
+    - name: Assert k3s hands the network over to Cilium
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode | from_yaml }}"
+      ansible.builtin.assert:
+        that:
+          - k3s_config['flannel-backend'] | default('') == 'none'
+          - k3s_config['disable-network-policy'] | default(false) | bool
+        fail_msg: >-
+          k3s_cni is cilium, so config.yaml must set flannel-backend: none and
+          disable-network-policy: true. Rendered config:
+          {{ k3s_config }}
+      register: check_flannel_off
+      ignore_errors: true
+
+    - name: Assert kube-proxy is switched off
+      vars:
+        k3s_config: "{{ k3s_config_raw['content'] | b64decode | from_yaml }}"
+      ansible.builtin.assert:
+        that:
+          - k3s_config['disable-kube-proxy'] | default(false) | bool
+        fail_msg: >-
+          k3s_kube_proxy_replacement is true, so config.yaml must set
+          disable-kube-proxy: true. Rendered config:
+          {{ k3s_config }}
+      register: check_kube_proxy_off
+      ignore_errors: true
+
+    # -- HelmChart CR ----------------------------------------------------
+    #
+    # The role installs Cilium as an auto-deploying manifest, not with helm.
+    # The file name is not part of the contract; the scenario finds it.
+    - name: Find the Cilium manifest in the auto-deploy directory
+      ansible.builtin.find:
+        paths: /var/lib/rancher/k3s/server/manifests/
+        patterns: "*cilium*"
+      register: cilium_manifests
+
+    - name: Assert a Cilium manifest was written
+      ansible.builtin.assert:
+        that:
+          - cilium_manifests.files | length > 0
+        fail_msg: >-
+          No Cilium manifest in /var/lib/rancher/k3s/server/manifests/.
+          k3s_cni is cilium, so the role must drop a HelmChart CR there.
+      register: check_manifest_present
+      ignore_errors: true
+
+    - name: Read the Cilium manifest
+      ansible.builtin.slurp:
+        path: "{{ cilium_manifests.files[0].path }}"
+      register: cilium_manifest_raw
+      when: cilium_manifests.files | length > 0
+
+    - name: Assert the manifest is a HelmChart CR with the requested version and values
+      vars:
+        manifest: "{{ cilium_manifest_raw['content'] | b64decode | from_yaml }}"
+      ansible.builtin.assert:
+        that:
+          - manifest.kind == 'HelmChart'
+          - manifest.spec.version == k3s_cilium_version
+          - manifest.spec.valuesContent is defined
+          - (manifest.spec.valuesContent | from_yaml).operator.replicas == 1
+          - (manifest.spec.valuesContent | from_yaml).kubeProxyReplacement | default(false) | bool
+        fail_msg: >-
+          The Cilium HelmChart CR does not carry the requested chart version,
+          the k3s_cilium_values, or the kube-proxy replacement value:
+          {{ manifest }}
+      register: check_manifest_content
+      ignore_errors: true
+      when: cilium_manifests.files | length > 0
+
+    # -- Cluster objects -------------------------------------------------
+    - name: Wait for the HelmChart controller to create the Cilium DaemonSet
+      ansible.builtin.command: k3s kubectl get daemonset -n kube-system -o name
+      register: kube_system_daemonsets
+      changed_when: false
+      # Three minutes: enough for the HelmChart controller to run helm and pull
+      # the Cilium images, short enough that the scenario does not sit here for
+      # five minutes on every run while the feature is still unimplemented.
+      until: "'cilium' in kube_system_daemonsets.stdout"
+      retries: 18
+      delay: 10
+      ignore_errors: true
+
+    - name: Assert the Cilium DaemonSet exists
+      ansible.builtin.assert:
+        that:
+          - "'daemonset.apps/cilium' in kube_system_daemonsets.stdout"
+        fail_msg: >-
+          No Cilium DaemonSet in kube-system. Present:
+          {{ kube_system_daemonsets.stdout_lines }}
+      register: check_cilium_daemonset
+      ignore_errors: true
+
+    - name: Assert flannel is not deployed alongside Cilium
+      ansible.builtin.assert:
+        that:
+          - "'flannel' not in kube_system_daemonsets.stdout"
+        fail_msg: >-
+          A flannel DaemonSet is running although k3s_cni is cilium.
+      register: check_no_flannel_daemonset
+      ignore_errors: true
+
+    # -- Dataplane -------------------------------------------------------
+    - name: Wait for the Cilium DaemonSet to be fully rolled out
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl get daemonset cilium -n kube-system
+          -o jsonpath={.status.numberReady},{.status.desiredNumberScheduled}
+      register: cilium_rollout
+      changed_when: false
+      until:
+        - cilium_rollout.rc == 0
+        - cilium_rollout.stdout == '1,1'
+      retries: 30
+      delay: 10
+      ignore_errors: true
+
+    - name: Assert the Cilium agent runs on the node
+      ansible.builtin.assert:
+        that:
+          - cilium_rollout.stdout | default('') == '1,1'
+        fail_msg: >-
+          The Cilium DaemonSet is not rolled out
+          (ready,desired = {{ cilium_rollout.stdout | default('') }}). This is
+          the check that needs the kernel surface described in molecule.yml.
+      register: check_cilium_rolled_out
+      ignore_errors: true
+
+    - name: Wait for the node to report Ready
+      ansible.builtin.command: k3s kubectl get nodes --no-headers
+      register: cilium_nodes
+      changed_when: false
+      until: "'NotReady' not in cilium_nodes.stdout and 'Ready' in cilium_nodes.stdout"
+      retries: 30
+      delay: 10
+      ignore_errors: true
+
+    - name: Assert the node is Ready with Cilium as its CNI
+      ansible.builtin.assert:
+        that:
+          - "'NotReady' not in cilium_nodes.stdout"
+          - "'Ready' in cilium_nodes.stdout"
+        fail_msg: >-
+          The node did not become Ready. Cilium is the only CNI here, so the
+          kubelet has nothing to work with: {{ cilium_nodes.stdout }}
+      register: check_node_ready
+      ignore_errors: true
+
+    # -- Handover --------------------------------------------------------
+    #
+    # The role installs Cilium once and then stops managing it, so that ArgoCD
+    # can take the chart over. The marker is what makes k3s leave the manifest
+    # alone on every restart after this one.
+    - name: Look for the handover marker
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/manifests/cilium.yaml.skip
+      register: cilium_skip_marker
+
+    - name: Assert the manifest is handed over to the cluster operator
+      ansible.builtin.assert:
+        that:
+          - cilium_skip_marker.stat.exists
+        fail_msg: >-
+          No cilium.yaml.skip next to the manifest. Without it k3s re-applies
+          the HelmChart on every server restart and overwrites whatever
+          manages Cilium afterwards.
+      register: check_handover_marker
+      ignore_errors: true
+
+    - name: Collect the results
+      ansible.builtin.set_fact:
+        cilium_checks:
+          - name: flannel and the built-in network policy are off
+            failed: "{{ check_flannel_off.failed | default(false) }}"
+            skipped: "{{ check_flannel_off.skipped | default(false) }}"
+          - name: kube-proxy is off
+            failed: "{{ check_kube_proxy_off.failed | default(false) }}"
+            skipped: "{{ check_kube_proxy_off.skipped | default(false) }}"
+          - name: a Cilium manifest exists
+            failed: "{{ check_manifest_present.failed | default(false) }}"
+            skipped: "{{ check_manifest_present.skipped | default(false) }}"
+          - name: the manifest is a HelmChart CR with version and values
+            failed: "{{ check_manifest_content.failed | default(false) }}"
+            skipped: "{{ check_manifest_content.skipped | default(false) }}"
+          - name: the Cilium DaemonSet was created
+            failed: "{{ check_cilium_daemonset.failed | default(false) }}"
+            skipped: "{{ check_cilium_daemonset.skipped | default(false) }}"
+          - name: no flannel DaemonSet is left
+            failed: "{{ check_no_flannel_daemonset.failed | default(false) }}"
+            skipped: "{{ check_no_flannel_daemonset.skipped | default(false) }}"
+          - name: the Cilium agent is rolled out on the node
+            failed: "{{ check_cilium_rolled_out.failed | default(false) }}"
+            skipped: "{{ check_cilium_rolled_out.skipped | default(false) }}"
+          - name: the node is Ready
+            failed: "{{ check_node_ready.failed | default(false) }}"
+            skipped: "{{ check_node_ready.skipped | default(false) }}"
+          - name: the manifest is handed over (.skip marker)
+            failed: "{{ check_handover_marker.failed | default(false) }}"
+            skipped: "{{ check_handover_marker.skipped | default(false) }}"
+
+- name: Report the Cilium checks
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Show the outcome of every check
+      ansible.builtin.debug:
+        msg: "{{ '%-4s  %s' | format(item_status, item.name) }}"
+      vars:
+        # A skipped check is not a passing check. It means the thing it depends
+        # on is missing, and the report must say so rather than stay quiet.
+        item_status: "{{ 'SKIP' if item.skipped | bool else ('FAIL' if item.failed | bool else 'PASS') }}"
+      loop: "{{ cilium_checks }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert the Cilium switch is complete
+      vars:
+        failed_checks: >-
+          {{ cilium_checks | selectattr('failed', 'truthy') | map(attribute='name') | list
+             + cilium_checks | selectattr('skipped', 'truthy') | map(attribute='name') | list }}
+      ansible.builtin.assert:
+        that:
+          - failed_checks | length == 0
+        fail_msg: >-
+          {{ failed_checks | length }} of {{ cilium_checks | length }} Cilium
+          checks failed or were skipped: {{ failed_checks | join('; ') }}
+        success_msg: >-
+          All {{ cilium_checks | length }} Cilium checks passed.

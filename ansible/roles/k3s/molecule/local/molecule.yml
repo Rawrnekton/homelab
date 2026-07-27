@@ -1,0 +1,47 @@
+---
+# Local scenario: everything that can be checked without a node.
+#
+# Two things live here, and neither one needs k3s installed anywhere:
+#
+#   1. The input contract of tasks/validate-variables.yml.
+#   2. The result of rendering templates/config.yaml.j2, which is where ten of
+#      the role's variables turn into node state.
+#
+# It runs on the Ansible controller through the `default` driver, so there is
+# no container to build, start or throw away. That makes it by far the
+# cheapest scenario in the suite and the right first stop in the fast group.
+#
+# The inventory holds a second host that no play ever runs on. config.yaml.j2
+# reads the address and the join token of the bootstrap node out of hostvars,
+# and the "joining node" cases need a bootstrap node to point at.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: default
+platforms:
+  - name: localhost
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  inventory:
+    hosts:
+      all:
+        hosts:
+          localhost:
+            ansible_connection: local
+          k3s-render-peer:
+            ansible_connection: local
+            ansible_default_ipv4:
+              address: 10.10.0.1
+            k3s_token: K10molecule::server:0000
+verifier:
+  name: ansible
+scenario:
+  # No create, prepare, destroy or idempotence: nothing is built and nothing
+  # changes. No verify either - the assertions ARE the converge, because a
+  # rejected input must fail the play that submits it.
+  test_sequence:
+    - syntax
+    - converge

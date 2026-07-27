@@ -1,0 +1,50 @@
+---
+# Fast scenario: single control-plane node, no workers, Docker driver.
+#
+# Goal: cheap feedback on the parts of the role that do not need multi-node
+# fidelity - config templating, service state, a single-node cluster coming
+# up, idempotence. Everything here runs on role defaults; feature variables
+# belong in the `features` scenario.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - name: k3s-single
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    host_vars:
+      k3s-single:
+        k3s_node_role: control
+        # overlayfs does not work nested inside Docker; use the native
+        # (copy-based) containerd snapshotter in every Docker scenario.
+        k3s_snapshotter: native
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy
