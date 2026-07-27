@@ -1,0 +1,8 @@
+---
+# All scenarios that converge all their hosts at the same time use this file. A
+# scenario with a different shape (add-node) has its own converge.yml.
+- name: Converge
+  hosts: all
+  become: true
+  roles:
+    - role: k3s

@@ -1,0 +1,32 @@
+---
+# Change k3s_extra_server_args and k3s_extra_agent_args into config.yaml keys.
+#
+# A pass-through argument is a CLI flag, but it must go into config.yaml. The
+# install puts INSTALL_K3S_EXEC into the unit file. An argument there changes
+# only on a new install, and the rolling-restart handler does not see a change
+# to it.
+#
+#   --key=value                    ->  key: value
+#   --key                          ->  key: true
+#   the same key two or more times ->  a YAML list under that key
+#
+# A control node runs a server and an agent, thus it uses the two lists. A
+# worker uses only the agent list. validate-variables.yml rejects
+# k3s_extra_server_args on a worker.
+- name: Forget the pass-through arguments of an earlier run
+  ansible.builtin.set_fact:
+    k3s_extra_args_by_key: {}
+
+- name: Group the pass-through arguments by config key
+  vars:
+    arg_key: "{{ item | regex_replace('^--', '') | regex_replace('=.*$', '') }}"
+    arg_value: "{{ item | regex_replace('^--[^=]*=?', '') or 'true' }}"
+  ansible.builtin.set_fact:
+    k3s_extra_args_by_key: >-
+      {{ k3s_extra_args_by_key
+         | combine({arg_key: k3s_extra_args_by_key.get(arg_key, []) +
+      [arg_value]}) }}
+  loop: >-
+    {{ (k3s_extra_server_args | default([]) if k3s_node_role == 'control' else
+    [])
+       + (k3s_extra_agent_args | default([])) }}

@@ -1,0 +1,31 @@
+---
+# Steps that need a running cluster. They run only on the first control-plane
+# node, because they use the API server or write into the auto-deploy manifests
+# directory. k3s reads that directory on the servers.
+
+# Cilium is NOT here. The role must install it before the other nodes join. Thus
+# tasks/cilium.yml installs it, directly after the bootstrap node starts.
+
+# The role gets the kubeconfig only from the bootstrap node, because this file
+# runs only on that node. Also, more control-plane nodes would write over the
+# same k3s_kubeconfig_dest.
+#
+# slurp and copy, not the fetch module: the address in the file must change on
+# the way, and fetch copies a file without change.
+- name: Read the kubeconfig from the node
+  ansible.builtin.slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: k3s_kubeconfig_raw
+  when: k3s_kubeconfig_fetch | bool
+
+- name: Write the kubeconfig to the Ansible controller
+  ansible.builtin.copy:
+    content: >-
+      {{ k3s_kubeconfig_raw['content'] | b64decode
+         | replace('https://127.0.0.1:6443',
+                   'https://' ~ ansible_default_ipv4.address ~ ':6443') }}
+    dest: "{{ k3s_kubeconfig_dest }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  when: k3s_kubeconfig_fetch | bool

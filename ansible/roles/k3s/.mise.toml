@@ -1,0 +1,32 @@
+[tasks.docs]
+description = "Render role documentation into README.md"
+run = "aar-doc --output-mode inject --output-file README.md . markdown"
+
+# Each task runs scripts/molecule-tally.sh. The script runs the scenarios one
+# after the other, and it continues when a scenario fails. At the end, it shows
+# a table of the results. The exit status is 0 only when all scenarios pass.
+#
+# The scenarios run in sequence, not in parallel. All scenarios except `local`
+# use Docker on the same host. Parallel runs save little time, but they increase
+# the load a lot. The `cluster` scenario alone starts five systemd containers,
+# and three of them are etcd members.
+
+[tasks.fast]
+description = "Molecule: the local checks and a single-node cluster (fast group)"
+dir = "{{ config_root }}"
+run = "./scripts/molecule-tally.sh local default"
+
+# The fast scenarios run first, so that a defect shows early.
+[tasks.full]
+description = "Molecule: every scenario, all topologies and features (full group)"
+dir = "{{ config_root }}"
+run = """
+./scripts/molecule-tally.sh \
+  local default features cilium \
+  workers ha add-node uninstall upgrade cluster
+"""
+
+[tasks.scenario]
+description = "Molecule: run the named scenarios (mise run scenario ha cluster)"
+dir = "{{ config_root }}"
+run = "./scripts/molecule-tally.sh {{ arg(name='scenario', var=true) }}"

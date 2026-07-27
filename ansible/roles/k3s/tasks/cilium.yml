@@ -1,0 +1,75 @@
+---
+# Install Cilium on a new cluster, then give control of it to the cluster
+# operator.
+#
+# This runs only on the bootstrap node, before other nodes join. A node that
+# joins a cluster without a CNI stays NotReady, thus the network comes first.
+#
+# The `.skip` marker at the end gives control to the operator. k3s applies a
+# manifest when the server starts AND when the file changes. Without the marker,
+# k3s applies the file again at each restart of each server. This undoes the
+# changes of ArgoCD to the same HelmChart. The k3s documentation gives
+# `<manifest>.skip` for this: k3s then ignores the manifest "as if it did not
+# exist". k3s does not change the AddOn or the objects that it created.
+#
+# Never do a `kubectl delete` of the HelmChart resource. When the CR goes away,
+# helm-controller runs `helm delete` in a job, and that removes the CNI. It is
+# safe to remove the FILE, but not the CR.
+- name: Look for the marker that hands Cilium over to the cluster operator
+  ansible.builtin.stat:
+    path: "{{ k3s_cilium_manifest }}.skip"
+  register: k3s_cilium_handover
+
+# The marker controls this task, not `force: false`. After the handover, the
+# role does not own this chart. A new render only puts an old version back on
+# the disk.
+- name: Write the Cilium HelmChart manifest
+  ansible.builtin.template:
+    src: cilium.yaml.j2
+    dest: "{{ k3s_cilium_manifest }}"
+    mode: "0600"
+  when: not k3s_cilium_handover.stat.exists
+
+# Ten minutes. helm-controller downloads the chart from helm.cilium.io, and the
+# node downloads the agent and operator images. On a first bootstrap, this is
+# the slow part.
+- name: Wait for the Cilium DaemonSet to be ready
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl get daemonset cilium -n kube-system -o
+      jsonpath={.status.numberReady},{.status.desiredNumberScheduled}
+  register: k3s_cilium_rollout
+  changed_when: false
+  failed_when: false
+  until:
+    - k3s_cilium_rollout.rc == 0
+    - k3s_cilium_rollout.stdout.split(',') | unique | length == 1
+    - k3s_cilium_rollout.stdout.split(',') | first not in ['', '0']
+  retries: 60
+  delay: 10
+  # See tasks/verify.yml: the assert below gives the error message. Thus the
+  # retry loop must not cause the play to fail.
+  ignore_errors: true
+
+- name: Assert Cilium came up
+  ansible.builtin.assert:
+    that:
+      - k3s_cilium_rollout.rc == 0
+      - k3s_cilium_rollout.stdout.split(',') | unique | length == 1
+      - k3s_cilium_rollout.stdout.split(',') | first not in ['', '0']
+    fail_msg: >-
+      The Cilium DaemonSet did not become ready (ready,desired = {{
+      k3s_cilium_rollout.stdout | default('') }}). Look at `kubectl -n
+      kube-system describe addon cilium`, at the helm-install-cilium job, and at
+      the cilium pods. Until Cilium runs, this node stays NotReady and no other
+      node can carry a workload.
+
+# state: touch with the times kept is idempotent. It reports changed when it
+# creates the file, and no change on each subsequent run.
+- name: Hand Cilium over to the cluster operator
+  ansible.builtin.file:
+    path: "{{ k3s_cilium_manifest }}.skip"
+    state: touch
+    mode: "0600"
+    modification_time: preserve
+    access_time: preserve

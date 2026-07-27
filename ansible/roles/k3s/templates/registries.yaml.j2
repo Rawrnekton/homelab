@@ -1,0 +1,13 @@
+{#
+  containerd registry configuration.
+
+  The role writes this file on each node when k3s_spegel_enabled is true.
+  config.yaml on the servers turns on the embedded registry mirror
+  ("embedded-registry"). But a node uses the mirror for a PULL only when
+  containerd has a mirror entry, and the agents also need that entry.
+
+  "*" mirrors all registries. When no peer in the cluster has the image, k3s
+  finds the upstream registry itself.
+#}
+mirrors:
+  "*": {}

@@ -1,0 +1,36 @@
+---
+# Run the input validation of the role with the vars of the include. Record if
+# the validation accepts them.
+#
+# Caller contract:
+#   case_name - name of the case for the report
+#   plus the k3s_* variables under test
+#
+# The record works the same as in expect-rejected.yml.
+- name: "Case: {{ case_name }}"
+  block:
+    - name: "Submit input: {{ case_name }}"
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: validate-variables.yml
+
+    - name: "Record that the input was accepted: {{ case_name }}"
+      ansible.builtin.set_fact:
+        case_outcome:
+          name: "{{ case_name }}"
+          ok: true
+          detail: accepted
+  rescue:
+    - name: "Record the unexpected rejection: {{ case_name }}"
+      ansible.builtin.set_fact:
+        case_outcome:
+          name: "{{ case_name }}"
+          ok: false
+          detail: >-
+            validation rejected a valid input: {{ ansible_failed_result.msg |
+            default('(no message)') | trim }}
+  always:
+    - name: "Add the outcome to the tally: {{ case_name }}"
+      ansible.builtin.set_fact:
+        molecule_case_results:
+          "{{ molecule_case_results | default([]) + [case_outcome] }}"

@@ -1,0 +1,82 @@
+---
+# Cluster scenario: three control-plane nodes and two workers.
+#
+# Goal: the full topology, the same shape as the homelab. It is the only
+# scenario that tests server-join and agent-join on the same cluster at the same
+# time. All other values are role defaults.
+#
+# Five k3s nodes in Docker (three of them etcd members) make this the heaviest
+# scenario. `ha` (control plane only) and `workers` (one server, two agents)
+# test the smaller parts. When a change breaks this scenario, run those first.
+#
+# Docker keeps this scenario in the same tool as all other scenarios, with no
+# other dependency on the host. The cost is less fidelity: see the
+# k3s_snapshotter override below. Also, there is no kernel isolation between the
+# "nodes".
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &node
+    name: k3s-bootstrap
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: k3s-molecule-cluster
+    network_mode: k3s-molecule-cluster
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - control
+  - <<: *node
+    name: k3s-control2
+    groups:
+      - control
+  - <<: *node
+    name: k3s-control3
+    groups:
+      - control
+  - <<: *node
+    name: k3s-worker1
+    groups:
+      - worker
+  - <<: *node
+    name: k3s-worker2
+    groups:
+      - worker
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      all:
+        # overlayfs does not work inside a Docker container.
+        k3s_snapshotter: native
+      control:
+        k3s_node_role: control
+      worker:
+        k3s_node_role: worker
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy
