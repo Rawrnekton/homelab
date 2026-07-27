@@ -1,0 +1,20 @@
+---
+# Bootstrap the first control-plane node.
+#
+# install.yml contains the steps that the other nodes also do. The special part
+# here is the join token. k3s makes it on the first start, and the nodes that
+# join later read it from the facts of this host.
+- name: Install and start the bootstrap server
+  ansible.builtin.import_tasks: install.yml
+
+- name: Read the auto-generated node token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+
+# The fact is set on this host only. The joining nodes read
+# hostvars[k3s_first_control_node]['k3s_token']. A plain k3s_token is not
+# defined on the other hosts.
+- name: Set the k3s_token fact for the joining nodes
+  ansible.builtin.set_fact:
+    k3s_token: "{{ k3s_token_raw['content'] | b64decode | trim }}"
