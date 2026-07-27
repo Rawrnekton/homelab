@@ -1,0 +1,13 @@
+{#
+  containerd registry configuration.
+
+  Written on every node when k3s_spegel_enabled is true. The embedded registry
+  mirror is switched on in config.yaml on the servers ("embedded-registry"),
+  but a node only PULLS through it when containerd has a mirror entry, and
+  that entry is needed on the agents as well.
+
+  "*" mirrors every registry. k3s resolves the upstream registry itself when
+  no peer in the cluster holds the image.
+#}
+mirrors:
+  "*": {}

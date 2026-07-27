@@ -1,0 +1,33 @@
+{#
+  Cilium, as a k3s auto-deploying manifest.
+
+  k3s applies every file in k3s_manifests_dir when the server starts and when
+  the file changes, so this CR reaches the API server without helm on the node
+  and before the cluster has a network.
+
+  bootstrap: true is what makes that possible. helm-controller then runs its
+  job with host networking and tolerates a NotReady node - without it the job
+  pod waits for the very network this chart has to bring up.
+
+  Written once, at cluster bootstrap; see tasks/cilium.yml for the handover.
+#}
+{% set cilium_values = k3s_cilium_values | default({}, true) %}
+{% if k3s_kube_proxy_replacement | default(false) | bool %}
+{%   set cilium_values = cilium_values | combine({'kubeProxyReplacement': true}) %}
+{% endif %}
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: cilium
+  namespace: kube-system
+spec:
+  bootstrap: true
+  repo: https://helm.cilium.io/
+  chart: cilium
+  version: "{{ k3s_cilium_version }}"
+  targetNamespace: kube-system
+{% if cilium_values %}
+  valuesContent: |-
+{{ cilium_values | to_nice_yaml(indent=2) | trim | indent(4, true) }}
+{% endif %}

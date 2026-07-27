@@ -1,15 +1,90 @@
-write-kubeconfig-mode: "0644"
-{% if inventory_hostname != groups['argo'][0] %}
-server: "https://{{ hostvars[groups['argo'][0]]['ansible_default_ipv4']['address'] }}:6443"
+{#
+  k3s node configuration.
+
+  Rendered on every run by tasks/write-config.yml, so this file is the single
+  place where a role variable turns into node state. A change to the rendered
+  result notifies the rolling-restart handler.
+
+  Pass-through arguments (k3s_extra_server_args, k3s_extra_agent_args) arrive
+  parsed as k3s_extra_args_by_key: {"node-label": ["a=b"], "debug": ["true"]}.
+  An argument whose key is also written from a role variable is merged into
+  that key; see k3s_config_list_keys in vars/main.yml.
+
+  Server-only keys are guarded by k3s_node_role. `k3s agent` exits with
+  "flag provided but not defined" when it meets one.
+#}
+{% set extra = k3s_extra_args_by_key | default({}) %}
+{% set node_labels = (k3s_node_labels | default([])) + extra.get('node-label', []) %}
+{% set node_taints = (k3s_node_taints | default([])) + extra.get('node-taint', []) %}
+{% set kubelet_args = (k3s_kubelet_args | default([])) + extra.get('kubelet-arg', []) %}
+{% set tls_sans = (k3s_tls_san | default([])) + extra.get('tls-san', []) %}
+{% set disabled = ([] if k3s_local_path_provisioner_enabled | bool else ['local-storage']) + extra.get('disable', []) %}
+{# -- Cluster membership ---------------------------------------------- #}
+{% if inventory_hostname != k3s_first_control_node %}
+server: "https://{{ hostvars[k3s_first_control_node]['ansible_default_ipv4']['address'] }}:6443"
+token: {{ hostvars[k3s_first_control_node]['k3s_token'] }}
 {% else %}
 cluster-init: true
 {% endif %}
-token: {{ cluster_setup_k3s_token }}
-
-{% set labels = cluster_setup_node_labels | default([]) %}
-{% if labels | length > 0 %}
+{# -- Container runtime ----------------------------------------------- #}
+{% if k3s_snapshotter is defined %}
+snapshotter: "{{ k3s_snapshotter }}"
+{% endif %}
+{# -- Node identity --------------------------------------------------- #}
+{% if node_labels %}
 node-label:
-{% for label in labels %}
-  - "{{ label }}"
+{% for label in node_labels %}
+  - {{ label | to_json }}
 {% endfor %}
 {% endif %}
+{% if node_taints %}
+node-taint:
+{% for taint in node_taints %}
+  - {{ taint | to_json }}
+{% endfor %}
+{% endif %}
+{% if kubelet_args %}
+kubelet-arg:
+{% for kubelet_arg in kubelet_args %}
+  - {{ kubelet_arg | to_json }}
+{% endfor %}
+{% endif %}
+{# -- Server-only keys ------------------------------------------------ #}
+{% if k3s_node_role == 'control' %}
+write-kubeconfig-mode: "0644"
+{% if tls_sans %}
+tls-san:
+{% for san in tls_sans %}
+  - {{ san | to_json }}
+{% endfor %}
+{% endif %}
+{% if disabled %}
+disable:
+{% for built_in in disabled %}
+  - {{ built_in | to_json }}
+{% endfor %}
+{% endif %}
+{% if k3s_spegel_enabled | bool %}
+embedded-registry: true
+{% endif %}
+{% if k3s_cni == 'cilium' %}
+flannel-backend: none
+disable-network-policy: true
+{% if k3s_kube_proxy_replacement | default(false) | bool %}
+disable-kube-proxy: true
+{% endif %}
+{% endif %}
+{% endif %}
+{# -- Pass-through arguments the keys above do not cover --------------- #}
+{% for key, values in extra | dictsort if key not in k3s_config_owned_keys + k3s_config_list_keys %}
+{% if values | length > 1 %}
+{{ key }}:
+{% for value in values %}
+  - {{ value | to_json }}
+{% endfor %}
+{% elif values[0] in ['true', 'false'] or values[0] is match('^-?[0-9]+$') %}
+{{ key }}: {{ values[0] }}
+{% else %}
+{{ key }}: {{ values[0] | to_json }}
+{% endif %}
+{% endfor %}

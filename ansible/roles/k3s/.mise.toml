@@ -1,0 +1,3 @@
+[tasks.docs]
+description = "Render role documentation into README.md"
+run = "aar-doc --output-mode inject --output-file README.md . markdown"

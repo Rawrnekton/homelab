@@ -1,2 +1,38 @@
 ---
-# handlers file for cluster-setup
+# Rolling restart after a configuration change.
+#
+# `throttle: 1` is what the v1.0.0 scope asks for: the restart is issued on
+# one node at a time. It is not a strict one-node-at-a-time roll - Ansible's
+# linear strategy finishes a task on every host before it starts the next one,
+# so the readiness check below runs after every node was told to restart. A
+# strict roll needs `serial:` on the play, and a role cannot set that.
+#
+# Both handlers listen on the same topic, so one notify drives the pair, and
+# they run in the order written here.
+#
+# The `when` keeps a first install quiet. The install path starts the service
+# itself, and restarting it again right after would be noise - and would break
+# the promise that adding a node leaves the running nodes alone.
+# k3s_already_running is the state of this node BEFORE this run.
+- name: Restart k3s
+  listen: k3s configuration changed
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: restarted
+  throttle: 1
+  when: k3s_already_running | bool
+
+- name: Wait for the k3s API to answer again
+  listen: k3s configuration changed
+  # See tasks/install.yml for why this is `k3s kubectl` and not a plain
+  # request against /readyz.
+  ansible.builtin.command: k3s kubectl get --raw /readyz
+  register: k3s_readyz_after_restart
+  changed_when: false
+  until: k3s_readyz_after_restart is success
+  retries: 30
+  delay: 10
+  throttle: 1
+  when:
+    - k3s_already_running | bool
+    - k3s_node_role == 'control'

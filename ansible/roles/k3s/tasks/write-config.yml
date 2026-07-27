@@ -1,0 +1,15 @@
+---
+# Render /etc/rancher/k3s/config.yaml for this node.
+#
+# Included by install.yml on every run, before the install script and before
+# the service is started. A change notifies the rolling-restart handler, which
+# stays quiet on a first install (see handlers/main.yml).
+- name: Parse the pass-through arguments
+  ansible.builtin.import_tasks: parse-extra-args.yml
+
+- name: Write the k3s configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0600"
+  notify: k3s configuration changed
