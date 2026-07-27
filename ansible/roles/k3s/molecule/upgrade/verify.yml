@@ -1,0 +1,97 @@
+---
+# Verify: opt-in upgrades (molecule/upgrade).
+#
+# Runs after side_effect.yml, which converged three times in total: once on
+# k3s_release_channel, once on the newer channel with k3s_upgrade off, and
+# once on the newer channel with k3s_upgrade on.
+- name: Verify the upgrade behaviour on every node
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the recorded versions
+      ansible.builtin.slurp:
+        path: "/var/tmp/molecule-k3s-version-{{ item }}"
+      register: recorded_versions
+      loop:
+        - before
+        - no-flag
+
+    - name: Read the version installed now
+      ansible.builtin.command: k3s --version
+      register: k3s_version_now
+      changed_when: false
+
+    - name: Name the three versions
+      ansible.builtin.set_fact:
+        version_before: "{{ recorded_versions.results[0].content | b64decode | trim }}"
+        version_no_flag: "{{ recorded_versions.results[1].content | b64decode | trim }}"
+        version_now: "{{ k3s_version_now.stdout_lines[0] | trim }}"
+
+    - name: Assert the cluster started on the configured channel
+      ansible.builtin.assert:
+        that:
+          - k3s_release_channel in version_before
+        fail_msg: >-
+          Expected a {{ k3s_release_channel }} build to start with,
+          got: {{ version_before }}
+
+    # -- k3s_upgrade is opt-in -------------------------------------------
+    - name: Assert a re-run without the flag changed nothing
+      ansible.builtin.assert:
+        that:
+          - version_no_flag == version_before
+        fail_msg: >-
+          k3s_upgrade is false, but a re-run on channel
+          {{ molecule_upgrade_to_channel }} moved this node from
+          {{ version_before }} to {{ version_no_flag }}. Upgrades must never
+          happen by surprise.
+
+    # -- k3s_upgrade with the flag ---------------------------------------
+    - name: Assert the run with the flag upgraded the node
+      ansible.builtin.assert:
+        that:
+          - version_now != version_before
+          - molecule_upgrade_to_channel in version_now
+        fail_msg: >-
+          k3s_upgrade is true and the channel moved to
+          {{ molecule_upgrade_to_channel }}, but this node still runs
+          {{ version_now }}.
+
+- name: Verify the cluster survived the upgrade
+  hosts: k3s-bootstrap
+  become: true
+  tasks:
+    - name: Wait for both nodes to report Ready
+      ansible.builtin.command: k3s kubectl get nodes --no-headers
+      register: node_list
+      changed_when: false
+      until:
+        - node_list.stdout_lines | length == 2
+        - "'NotReady' not in node_list.stdout"
+      retries: 30
+      delay: 10
+
+    - name: Assert both nodes came back Ready
+      ansible.builtin.assert:
+        that:
+          - node_list.stdout_lines | length == 2
+          - "'NotReady' not in node_list.stdout"
+        fail_msg: "Expected 2 Ready nodes after the upgrade, got:\n{{ node_list.stdout }}"
+
+    # The cordon itself is gone by the time this runs, so it cannot be read
+    # back. What must hold afterwards is that nothing stayed cordoned: an
+    # upgrade that drains a node and never uncordons it leaves the cluster
+    # smaller than it found it.
+    - name: Read the unschedulable flag of every node
+      ansible.builtin.command: k3s kubectl get nodes -o jsonpath={.items[*].spec.unschedulable}
+      register: unschedulable
+      changed_when: false
+
+    - name: Assert no node was left cordoned
+      ansible.builtin.assert:
+        that:
+          - "'true' not in unschedulable.stdout"
+        fail_msg: >-
+          A node is still cordoned after the upgrade. Cordon and drain must be
+          followed by an uncordon. Node list:
+          {{ node_list.stdout }}

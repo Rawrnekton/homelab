@@ -1,0 +1,72 @@
+---
+# HA scenario: three control-plane nodes, no workers.
+#
+# Goal: the control-plane-only half of the topology matrix - embedded etcd
+# quorum, server-join, TLS SANs on the shared API endpoint, and the rolling
+# restart that a config change must trigger.
+#
+# The role picks the bootstrap node itself: pre-flight-checklist.yml takes the
+# first control host out of ansible_play_hosts. The platform names are chosen
+# so that k3s-bootstrap wins that pick under any inventory ordering.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &node
+    name: k3s-bootstrap
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: k3s-molecule-ha
+    network_mode: k3s-molecule-ha
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - control
+  - <<: *node
+    name: k3s-control2
+    groups:
+      - control
+  - <<: *node
+    name: k3s-control3
+    groups:
+      - control
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      all:
+        # overlayfs does not work nested inside Docker.
+        k3s_snapshotter: native
+        # side_effect.yml appends a second SAN to this list to trigger the
+        # config-change restart. Keep both lists in step.
+        k3s_tls_san:
+          - k3s-api.molecule.test
+      control:
+        k3s_node_role: control
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy
