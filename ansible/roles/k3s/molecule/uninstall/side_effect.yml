@@ -1,0 +1,20 @@
+---
+# Side effect: take k3s off both nodes.
+#
+# The removal itself must be idempotent as well, so the role runs twice. The
+# second run has nothing left to remove and must still succeed.
+- name: Remove k3s
+  hosts: all
+  become: true
+  vars:
+    k3s_state: absent
+  roles:
+    - role: k3s
+
+- name: Remove k3s again
+  hosts: all
+  become: true
+  vars:
+    k3s_state: absent
+  roles:
+    - role: k3s

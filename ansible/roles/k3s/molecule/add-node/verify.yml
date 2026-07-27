@@ -1,0 +1,64 @@
+---
+# Verify: a node added to a running cluster (molecule/add-node).
+- name: Verify the existing nodes were left alone
+  hosts: initial
+  become: true
+  tasks:
+    - name: Read the k3s service state
+      ansible.builtin.systemd:
+        name: "{{ 'k3s' if k3s_node_role == 'control' else 'k3s-agent' }}"
+      register: k3s_service
+
+    - name: Read the start time recorded before the new node was added
+      ansible.builtin.slurp:
+        path: /var/tmp/molecule-k3s-active-before
+      register: active_before_raw
+
+    - name: Assert the service was not restarted
+      vars:
+        active_before: "{{ active_before_raw['content'] | b64decode | trim }}"
+        active_now: "{{ k3s_service.status.ActiveEnterTimestamp }}"
+      ansible.builtin.assert:
+        that:
+          - active_now == active_before
+        fail_msg: >-
+          Adding a node restarted k3s on this existing node. It was up since
+          {{ active_before }} and is now up since {{ active_now }}. Joining new
+          inventory members must not touch the nodes that already run.
+
+- name: Verify the new node joined
+  hosts: added
+  become: true
+  tasks:
+    - name: Read the k3s agent service state
+      ansible.builtin.systemd:
+        name: k3s-agent
+      register: k3s_agent_service
+
+    - name: Assert the added worker runs an agent
+      ansible.builtin.assert:
+        that:
+          - k3s_agent_service.status.ActiveState == 'active'
+          - k3s_agent_service.status.UnitFileState == 'enabled'
+
+- name: Verify the cluster grew
+  hosts: k3s-bootstrap
+  become: true
+  tasks:
+    - name: Wait for all three nodes to report Ready
+      ansible.builtin.command: k3s kubectl get nodes --no-headers
+      register: node_list
+      changed_when: false
+      until:
+        - node_list.stdout_lines | length == 3
+        - "'NotReady' not in node_list.stdout"
+      retries: 24
+      delay: 10
+
+    - name: Assert the added node is in the cluster
+      ansible.builtin.assert:
+        that:
+          - node_list.stdout_lines | length == 3
+          - "'k3s-worker2' in node_list.stdout"
+          - "'NotReady' not in node_list.stdout"
+        fail_msg: "Expected 3 Ready nodes including k3s-worker2, got:\n{{ node_list.stdout }}"
