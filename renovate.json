@@ -1,21 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
-  "ignorePaths": [
-    "ansible/**"
-  ],
-  "enabledManagers": [
-    "kustomize",
-    "custom.regex"
-  ],
+  "extends": ["config:recommended"],
+  "ignorePaths": ["ansible/**"],
+  "enabledManagers": ["kustomize", "custom.regex"],
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)kustomization\\.ya?ml$/"
-      ],
+      "managerFilePatterns": ["/(^|/)kustomization\\.ya?ml$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)\\s+tag:\\s*(?<currentValue>[^\\s]+)"
       ]
@@ -36,6 +27,11 @@
     {
       "description": "Disable updates for Minecraft - manually managed",
       "matchPackageNames": ["itzg/minecraft-server"],
+      "enabled": false
+    },
+    {
+      "description": "Copperforge bumps its own tag from its build workflow",
+      "matchPackageNames": ["ghcr.io/rawrnekton/copperforge"],
       "enabled": false
     }
   ]
