@@ -37,6 +37,11 @@
       "description": "Disable updates for Minecraft - manually managed",
       "matchPackageNames": ["itzg/minecraft-server"],
       "enabled": false
+    },
+    {
+      "description": "Copperforge bumps its own tag from its build workflow - Renovate also cannot read the private package",
+      "matchPackageNames": ["ghcr.io/rawrnekton/copperforge"],
+      "enabled": false
     }
   ]
 }

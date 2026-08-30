@@ -1,9 +1,14 @@
 name: Validate manifests
 
 on:
+  # Renovate uses automergeType "branch" for services, so it never opens a PR.
   push:
     branches:
       - 'renovate/**'
+  # Deploy bumps pushed from a service repo arrive as a PR.
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
