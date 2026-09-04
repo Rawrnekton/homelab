@@ -1,11 +1,6 @@
 name: Validate manifests
 
 on:
-  # Renovate "automerges"
-  push:
-    branches:
-      - "renovate/**"
-  # Deploy bumps pushed from a service repo
   pull_request:
     branches:
       - main
