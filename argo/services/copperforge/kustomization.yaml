@@ -21,4 +21,4 @@ resources:
 images:
 - name: copperforge
   newName: ghcr.io/rawrnekton/copperforge
-  newTag: 0.5.0-rc.3
+  newTag: 0.6.0-rc.3
