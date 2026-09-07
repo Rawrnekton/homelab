@@ -19,6 +19,9 @@ spec:
           env:
             - name: APP_ORIGIN
               value: https://copperforge.cindergla.de
+          envFrom:
+            - secretRef:
+                name: copperforge-admin-secret
           volumeMounts:
             - name: copperforge-data
               mountPath: /data
