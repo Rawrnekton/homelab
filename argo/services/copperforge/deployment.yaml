@@ -19,11 +19,6 @@ spec:
           env:
             - name: APP_ORIGIN
               value: https://copperforge.cindergla.de
-            - name: ADMIN_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: copperforge-admin-token-secret
-                  key: ADMIN_TOKEN
           volumeMounts:
             - name: copperforge-data
               mountPath: /data
