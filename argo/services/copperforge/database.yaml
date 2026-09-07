@@ -1,0 +1,17 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: copperforge-db
+  namespace: copperforge
+spec:
+  instances: 2
+  bootstrap:
+    initdb:
+      database: copperforge
+      owner: copperforge
+      secret:
+        name: copperforge-database-secret
+  storage:
+    size: 2Gi
+    storageClass: longhorn-r1
