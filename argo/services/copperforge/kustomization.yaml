@@ -11,6 +11,7 @@ labels:
 
 resources:
 - copperforge-ghcr-pull-secret-sealed.yaml
+- sealed-secrets/copperforge-copperforge-admin-secret-sealed.yaml
 - deployment.yaml
 - ingress.yaml
 - pvc.yaml
