@@ -7,9 +7,6 @@ spec:
   strategy:
     type: Recreate
   template:
-    metadata:
-      annotations:
-        backup.velero.io/backup-volumes: copperforge-data
     spec:
       containers:
         - name: copperforge
@@ -19,15 +16,17 @@ spec:
           env:
             - name: APP_ORIGIN
               value: https://copperforge.cindergla.de
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: copperforge-database-secret
+                  key: password
+            # $(POSTGRES_PASSWORD) is expanded by kubelet from the env entry
+            # above, so the password stays in the sealed secret only.
+            - name: DATABASE_URL
+              value: postgres://copperforge:$(POSTGRES_PASSWORD)@copperforge-db-rw:5432/copperforge?sslmode=require
           envFrom:
             - secretRef:
                 name: copperforge-admin-secret
-          volumeMounts:
-            - name: copperforge-data
-              mountPath: /data
       imagePullSecrets:
         - name: copperforge-ghcr-pull-secret
-      volumes:
-        - name: copperforge-data
-          persistentVolumeClaim:
-            claimName: copperforge-data

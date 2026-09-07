@@ -12,9 +12,10 @@ labels:
 resources:
 - copperforge-ghcr-pull-secret-sealed.yaml
 - sealed-secrets/copperforge-copperforge-admin-secret-sealed.yaml
+- sealed-secrets/copperforge-copperforge-database-secret-sealed.yaml
+- database.yaml
 - deployment.yaml
 - ingress.yaml
-- pvc.yaml
 - service.yaml
 
 images:
