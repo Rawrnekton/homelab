@@ -1,0 +1,19 @@
+---
+galaxy_info:
+  author: Jonathan Gerdes
+  description: log in to iSCSI targets and mount their LUNs
+  license: MIT
+  min_ansible_version: 2.21.2
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - 22.04
+        - 24.04
+
+  galaxy_tags:
+    - iscsi
+    - storage
+    - homelab
+
+dependencies: []

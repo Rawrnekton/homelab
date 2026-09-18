@@ -1,15 +1,15 @@
 ---
-# tasks file for iscsi-client
+- name: Validate variables
+  ansible.builtin.import_tasks: validate-variables.yml
 
-# First enriching every portal with portal_ip and every target with an `iscsi_dev` key
-# (the stable /dev/disk/by-pathdevice node) so later tasks (filesystem create, mount/fstab)
-# don't rebuild the path string themselves.
+# Every portal is enriched with `portal_ip` and every target with `iscsi_dev`
+# (the stable /dev/disk/by-path node) up front, so that the later tasks
+# (filesystem, mount, fstab) do not rebuild the path string themselves.
 #
 # Resulting shape of iscsi_client_targets:
 #   - name: <portal display name>
 #     portal: <portal FQDN or IP, as configured>
-#     # added by - name: Add portal_ip attribute
-#     portal_ip: <resolved IP>
+#     portal_ip: <resolved IP>                   # added by "Add portal_ip attribute"
 #     port: <int, optional, default 3260>
 #     targets:
 #       - name: <target IQN>
@@ -18,8 +18,8 @@
 #         user: <chap user, optional>
 #         password: <chap password, optional>
 #         fstype: <optional, default ext4>
-#         # added by - name: Add iscsi_dev path to each target
 #         iscsi_dev: /dev/disk/by-path/ip-<portal_ip>:<port>-iscsi-<IQN>-lun-0
+#                                                    # added by "Add iscsi_dev path to each target"
 
 # DNS lookups must resolve against this host, not the control node: with
 # split-horizon DNS, the controller's view of a portal FQDN (e.g. a
@@ -41,27 +41,25 @@
 - name: Add portal_ip attribute
   ansible.builtin.set_fact:
     iscsi_client_targets: >-
-      {%- set result = [] -%}
-      {%- for portal in iscsi_client_targets -%}
+      {%- set result = [] -%} {%- for portal in iscsi_client_targets -%}
         {%- set ip = portal.portal if (portal.portal | ansible.utils.ipaddr)
-              else portal_dns.results[loop.index0].stdout_lines[0].split()[0] -%}
+              else portal_dns.results[loop.index0].stdout_lines[0].split()[0]
+      -%}
         {%- set _ = result.append(portal | combine({'portal_ip': ip})) -%}
-      {%- endfor -%}
-      {{ result }}
+      {%- endfor -%} {{ result }}
 
 - name: Add iscsi_dev path to each target
   ansible.builtin.set_fact:
     iscsi_client_targets: >-
-      {%- set result = [] -%}
-      {%- for portal in iscsi_client_targets -%}
+      {%- set result = [] -%} {%- for portal in iscsi_client_targets -%}
         {%- set targets = [] -%}
         {%- for target in portal.targets -%}
-          {%- set dev = '/dev/disk/by-path/ip-' ~ portal.portal_ip ~ ':' ~ (portal.port | default(3260)) ~ '-iscsi-' ~ target.name ~ '-lun-0' -%}
+          {%- set dev = '/dev/disk/by-path/ip-' ~ portal.portal_ip ~ ':' ~
+      (portal.port | default(3260)) ~ '-iscsi-' ~ target.name ~ '-lun-0' -%}
           {%- set _ = targets.append(target | combine({'iscsi_dev': dev})) -%}
         {%- endfor -%}
         {%- set _ = result.append(portal | combine({'targets': targets})) -%}
-      {%- endfor -%}
-      {{ result }}
+      {%- endfor -%} {{ result }}
 
 - name: Install iscsi initiator utilities
   ansible.builtin.package:
@@ -79,20 +77,26 @@
     name: open-iscsi
     enabled: true
 
-# sendtargets discovery has two destructive side effects this avoids:
-# it re-creates node records for every IQN the portal advertises (not just
-# the ones that get configured) and, on every run, resets each record's keys back
-# to iscsid.conf defaults, which would wipe the CHAP password and
-# node.startup written by the login task below. The exact(portal, target) pairs
-# are already know, so the records are created directly here
-# let community.general.open_iscsi persist auth + node.startup on login.
+# sendtargets discovery has two destructive side effects this avoids: it
+# re-creates node records for every IQN the portal advertises (not just the
+# ones that get configured) and, on every run, resets each record's keys back
+# to iscsid.conf defaults, which would wipe the CHAP password and node.startup
+# written by the login task below. The exact (portal, target) pairs are already
+# known, so the records are created directly here, and
+# community.general.open_iscsi persists auth + node.startup on login.
+#
+# command, not a module: open_iscsi only creates node records through
+# discovery, and there is no other module that writes the node database.
 - name: Create iSCSI node record for each desired target
   ansible.builtin.command:
     cmd: >-
-      iscsiadm -m node -o new
-      -T {{ target.name }}
-      -p {{ portal.portal_ip }}:{{ portal.port | default(3260) }}
-    creates: "/etc/iscsi/nodes/{{ target.name }}/{{ portal.portal_ip }},{{ portal.port | default(3260) }},1/default"
+      iscsiadm -m node -o new -T {{ target.name }} -p {{ portal.portal_ip }}:{{
+      portal.port | default(3260) }}
+    # A glob: the record is created as <ip>,<port> and open-iscsi renames it
+    # to <ip>,<port>,<tpgt>/ once the login has learned the portal group.
+    creates:
+      "/etc/iscsi/nodes/{{ target.name }}/{{ portal.portal_ip }},{{ portal.port
+      | default(3260) }}*"
   loop: "{{ iscsi_client_targets | subelements('targets') }}"
   loop_control:
     label: "{{ portal.name }} -> {{ target.human_readable_name }}"
@@ -107,21 +111,18 @@
     port: "{{ portal.port | default(3260) }}"
     target: "{{ target.name }}"
     auto_node_startup: true
-    node_auth: "{{ 'CHAP' if (target.user is defined and target.password is defined) else omit }}"
+    node_auth:
+      "{{ 'CHAP' if (target.user is defined and target.password is defined) else
+      omit }}"
     node_user: "{{ target.user | default(omit) }}"
     node_pass: "{{ target.password | default(omit) }}"
   loop: "{{ iscsi_client_targets | subelements('targets') }}"
   loop_control:
-    label: "{{ portal.name }} -> {{ target.human_readable_name }} ({{ target.name }})"
+    label:
+      "{{ portal.name }} -> {{ target.human_readable_name }} ({{ target.name }})"
   vars:
     portal: "{{ item.0 }}"
     target: "{{ item.1 }}"
-
-- name: Enumerate currently cached iSCSI node IQNs
-  ansible.builtin.command: iscsiadm -m node
-  register: iscsi_cached_nodes
-  changed_when: false
-  failed_when: iscsi_cached_nodes.rc not in [0, 21]
 
 - name: Wait for device nodes
   ansible.builtin.wait_for:
@@ -135,7 +136,7 @@
     portal: "{{ item.0 }}"
     target: "{{ item.1 }}"
 
-- name: Create filesystem (unformatted LUN -> ext4)
+- name: Create filesystem on an unformatted LUN
   community.general.filesystem:
     fstype: "{{ target.fstype | default('ext4') }}"
     dev: "{{ target.iscsi_dev }}"
@@ -146,18 +147,7 @@
     portal: "{{ item.0 }}"
     target: "{{ item.1 }}"
 
-- name: Ensure mount point exists
-  ansible.builtin.file:
-    path: "{{ target.mountpoint }}"
-    state: directory
-    mode: "0750"
-  loop: "{{ iscsi_client_targets | subelements('targets') }}"
-  loop_control:
-    label: "{{ portal.portal }} -> {{ target.name }}"
-  vars:
-    portal: "{{ item.0 }}"
-    target: "{{ item.1 }}"
-
+# The mount module creates the mountpoint when it is missing.
 - name: Mount and persist in fstab (writable)
   ansible.posix.mount:
     path: "{{ target.mountpoint }}"
@@ -165,6 +155,22 @@
     fstype: "{{ target.fstype | default('ext4') }}"
     opts: "rw,_netdev,nofail,x-systemd.requires=open-iscsi.service,x-systemd.device-timeout=30"
     state: mounted
+  loop: "{{ iscsi_client_targets | subelements('targets') }}"
+  loop_control:
+    label: "{{ portal.portal }} -> {{ target.name }}"
+  vars:
+    portal: "{{ item.0 }}"
+    target: "{{ item.1 }}"
+
+# After the mount, not before: the mode lands on the root of the mounted
+# filesystem, where it persists. Set before the mount it sits on the directory
+# underneath, the mount covers it with the filesystem's own root (0755), and
+# the next run changes it again.
+- name: Restrict the mountpoint
+  ansible.builtin.file:
+    path: "{{ target.mountpoint }}"
+    state: directory
+    mode: "0750"
   loop: "{{ iscsi_client_targets | subelements('targets') }}"
   loop_control:
     label: "{{ portal.portal }} -> {{ target.name }}"

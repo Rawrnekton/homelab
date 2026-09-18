@@ -1,0 +1,31 @@
+---
+# Local scenario: the input contract, and nothing else.
+#
+# meta/argument_specs.yml and tasks/validate-variables.yml decide what the
+# role accepts, and neither needs a host. This scenario runs on the Ansible
+# controller through the `default` driver, so there is no container to build,
+# start or throw away. Seconds, where every other scenario takes minutes.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: default
+platforms:
+  - name: localhost
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  inventory:
+    hosts:
+      all:
+        hosts:
+          localhost:
+            ansible_connection: local
+scenario:
+  # No create, prepare, destroy or idempotence: nothing is built and nothing
+  # changes. No verify either - the assertions ARE the converge, because a
+  # rejected input must fail the play that submits it.
+  test_sequence:
+    - syntax
+    - converge

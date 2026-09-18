@@ -1,0 +1,62 @@
+---
+# Take the iSCSI state out of the kernel of the host before the containers go.
+#
+# Both halves live outside the containers: the initiator's sessions are kernel
+# objects that would stay in recovery for ever once the container's iscsid is
+# gone, and the LIO target lives in configfs. molecule runs this playbook
+# before destroy, also when a step failed, and once at the very start of a
+# test run, when no container exists yet: hence ignore_unreachable.
+- name: Log the initiators out
+  hosts: initiator
+  become: true
+  ignore_unreachable: true
+  tasks:
+    # Every scenario mounts under /var/lib/molecule. The mount table is used
+    # rather than iscsi_client_targets, because a scenario may template that
+    # variable from facts of the targets. Before any container exists there
+    # are no facts at all: hence the default.
+    - name: Unmount every LUN the role mounted
+      ansible.posix.mount:
+        path: "{{ item.mount }}"
+        state: unmounted
+      loop: >-
+        {{ ansible_facts.mounts | default([])
+           | selectattr('mount', 'match', '^/var/lib/molecule/') | list }}
+      loop_control:
+        label: "{{ item.mount }}"
+
+    # rc 21 is "no records/sessions found". rc 2 is the command being absent,
+    # when the role never got as far as installing open-iscsi; there is
+    # nothing to log out of then.
+    - name: Log out of every session
+      ansible.builtin.command:
+        cmd: iscsiadm -m node --logoutall=all
+      register: logout
+      changed_when: logout.rc == 0
+      failed_when: logout.rc not in [0, 2, 21]
+
+- name: Remove the LIO targets
+  hosts: target
+  become: true
+  gather_facts: false
+  ignore_unreachable: true
+  tasks:
+    - name: Delete the targets
+      ansible.builtin.command:
+        cmd: targetcli /iscsi delete {{ item.iqn }}
+      loop: "{{ molecule_lio_targets | default([]) }}"
+      loop_control:
+        label: "{{ item.iqn }}"
+      register: deleted_target
+      changed_when: deleted_target.rc == 0
+      failed_when: false
+
+    - name: Delete the backstores
+      ansible.builtin.command:
+        cmd: targetcli /backstores/fileio delete {{ item.name }}
+      loop: "{{ molecule_lio_targets | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: deleted_backstore
+      changed_when: deleted_backstore.rc == 0
+      failed_when: false

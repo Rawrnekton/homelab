@@ -1,0 +1,88 @@
+---
+# Role argument specification — the schema/contract for this role's variables.
+#
+# Validated automatically before any task in `main` runs (fail fast on bad
+# input), and rendered as documentation by `ansible-doc -t role ... iscsi_client`.
+#
+# Prose descriptions live HERE (single source of truth); defaults/main.yml
+# holds the actual values with only terse orienting comments.
+argument_specs:
+  main:
+    short_description: Log in to iSCSI targets and mount their LUNs.
+    description:
+      - Installs the open-iscsi initiator, creates a node record for every
+        configured (portal, target) pair, logs in with CHAP where credentials
+        are given, formats the LUN once and mounts it persistently.
+      - The role deliberately avoids C(sendtargets) discovery, because that call
+        resets every node record it touches on every run and would wipe the CHAP
+        credentials and C(node.startup) it wrote before.
+    author:
+      - Jonathan Gerdes
+    options:
+      iscsi_client_targets:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description:
+          - The portals to log in to, each with the targets to mount from it.
+          - One entry is one portal; its C(targets) list holds one entry per
+            IQN. A LUN is always LUN 0 of its target.
+        options:
+          name:
+            type: str
+            required: true
+            description: Label for the portal, used in task output only.
+          portal:
+            type: str
+            required: true
+            description:
+              - IP address or FQDN of the portal.
+              - An FQDN is resolved on the managed host, not on the controller,
+                so split-horizon DNS gives the initiator the address it will
+                actually use.
+          port:
+            type: int
+            required: false
+            description: TCP port of the portal. C(3260) when omitted.
+          targets:
+            type: list
+            elements: dict
+            required: true
+            description: The targets to log in to on this portal.
+            options:
+              human_readable_name:
+                type: str
+                required: true
+                description: Label for the target, used in task output only.
+              name:
+                type: str
+                required: true
+                description: The IQN of the target.
+              user:
+                type: str
+                required: false
+                description:
+                  - CHAP user name. Switches CHAP on for this target.
+                  - Must be set together with C(password).
+              password:
+                type: str
+                required: false
+                no_log: true
+                description:
+                  - CHAP password. Must be set together with C(user).
+              mountpoint:
+                type: path
+                required: true
+                description:
+                  - Absolute path where LUN 0 of the target is mounted.
+                  - Created when missing, written to C(/etc/fstab) with
+                    C(_netdev) and C(nofail).
+              fstype:
+                type: str
+                required: false
+                description:
+                  - Filesystem to create on an unformatted LUN and to mount it
+                    with. C(ext4) when omitted.
+                  - The role never reformats a LUN that already carries a
+                    filesystem.

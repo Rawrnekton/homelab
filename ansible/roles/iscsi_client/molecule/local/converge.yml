@@ -1,0 +1,296 @@
+---
+# Converge: the input contract, checked on the controller.
+#
+# This scenario has no verify playbook on purpose. A rejected input must make
+# the play that submits it fail, so the assertions live here, in the converge.
+#
+# Two helper task files hold the plumbing:
+#   tasks/expect-rejected.yml - the input must fail, with case_expect in the message
+#   tasks/expect-accepted.yml - the input must pass
+# Both run tasks/validate.yml: the argument spec, then validate-variables.yml.
+#
+# Every case records its outcome in molecule_case_results, and the report play
+# at the end fails once with the whole table. One broken rule must not hide
+# the rules behind it.
+- name: Verify the role rejects bad input
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # A valid target to build the bad cases from.
+    good_target:
+      human_readable_name: data
+      name: iqn.2026-09.test.molecule:local:data
+      user: molecule
+      password: secret
+      mountpoint: /srv/data
+  tasks:
+    # -- Shape: the argument spec ----------------------------------------
+    - name: Reject a string instead of a list
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: iscsi_client_targets is a string
+        case_expect: iscsi_client_targets
+        iscsi_client_targets: nas.example.internal
+
+    - name: Reject a portal without an address
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: portal entry has no portal key
+        case_expect: "missing required arguments: portal"
+        iscsi_client_targets:
+          - name: nas
+            targets:
+              - "{{ good_target }}"
+
+    - name: Reject a portal without targets
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: portal entry has no targets key
+        case_expect: "missing required arguments: targets"
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+
+    - name: Reject a target without a mountpoint
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: target entry has no mountpoint
+        case_expect: "missing required arguments: mountpoint"
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - human_readable_name: data
+                name: iqn.2026-09.test.molecule:local:data
+
+    - name: Reject a key the role does not know
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: target entry carries an unknown key (lun)
+        case_expect: Supported parameters include
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - "{{ good_target | combine({'lun': 1}) }}"
+
+    - name: Reject a port that is not a number
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: port is a word
+        case_expect: port
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            port: iscsi
+            targets:
+              - "{{ good_target }}"
+
+    # -- Cross-field rules: validate-variables.yml ------------------------
+    - name: Reject a port outside the TCP range
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: port is 70000
+        case_expect: between 1 and 65535
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            port: 70000
+            targets:
+              - "{{ good_target }}"
+
+    - name: Reject two portals with the same name
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: two portals share a name
+        case_expect: unique name
+        iscsi_client_targets:
+          - name: nas
+            portal: nas-1.example.internal
+            targets:
+              - "{{ good_target }}"
+          - name: nas
+            portal: nas-2.example.internal
+            targets:
+              - "{{ good_target | combine({'mountpoint': '/srv/other'}) }}"
+
+    - name: Reject a target name that is not an IQN
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: target name is a plain word
+        case_expect: iSCSI qualified name
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - "{{ good_target | combine({'name': 'data'}) }}"
+
+    - name: Reject the same IQN twice on one portal
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: one portal lists an IQN twice
+        case_expect: only once per portal
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - "{{ good_target }}"
+              - "{{ good_target | combine({'mountpoint': '/srv/other'}) }}"
+
+    - name: Reject a CHAP user without a password
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: target has user but no password
+        case_expect: half a credential
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - human_readable_name: data
+                name: iqn.2026-09.test.molecule:local:data
+                user: molecule
+                mountpoint: /srv/data
+
+    - name: Reject a CHAP password without a user
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: target has password but no user
+        case_expect: half a credential
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - human_readable_name: data
+                name: iqn.2026-09.test.molecule:local:data
+                password: secret
+                mountpoint: /srv/data
+
+    - name: Reject a relative mountpoint
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: mountpoint is relative
+        case_expect: absolute path
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - "{{ good_target | combine({'mountpoint': 'srv/data'}) }}"
+
+    - name: Reject two targets on the same mountpoint
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: two portals mount at the same path
+        case_expect: no two targets may share one
+        iscsi_client_targets:
+          - name: nas-1
+            portal: nas-1.example.internal
+            targets:
+              - "{{ good_target }}"
+          - name: nas-2
+            portal: nas-2.example.internal
+            targets:
+              - "{{ good_target }}"
+
+- name: Verify the role accepts good input
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Accept the role defaults
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: no variables set at all
+
+    - name: Accept a portal by name with CHAP and the optional keys left out
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: the homelab shape, port and fstype omitted
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - human_readable_name: data
+                name: iqn.2013-03.com.wdc:nas:data
+                user: garage
+                password: secret
+                mountpoint: /var/lib/garage/data
+              - human_readable_name: snapshots
+                name: iqn.2013-03.com.wdc:nas:snapshots
+                user: garage
+                password: secret
+                mountpoint: /var/lib/garage/snapshots
+
+    - name:
+        Accept a portal by IP address without CHAP and every optional key set
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: portal by IP, custom port, no CHAP, explicit fstype
+        iscsi_client_targets:
+          - name: nas
+            portal: 10.0.0.10
+            port: 3261
+            targets:
+              - human_readable_name: scratch
+                name: iqn.2026-09.test.molecule:local:scratch
+                mountpoint: /srv/scratch
+                fstype: xfs
+
+    - name: Accept the same IQN on two different portals
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: one IQN served by two portals, two mountpoints
+        iscsi_client_targets:
+          - name: nas-1
+            portal: nas-1.example.internal
+            targets:
+              - human_readable_name: data
+                name: iqn.2026-09.test.molecule:local:data
+                mountpoint: /srv/data-1
+          - name: nas-2
+            portal: nas-2.example.internal
+            targets:
+              - human_readable_name: data
+                name: iqn.2026-09.test.molecule:local:data
+                mountpoint: /srv/data-2
+
+    - name: Accept the two other IQN forms
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: eui. and naa. names
+        iscsi_client_targets:
+          - name: nas
+            portal: nas.example.internal
+            targets:
+              - human_readable_name: eui
+                name: eui.02004567A425678D
+                mountpoint: /srv/eui
+              - human_readable_name: naa
+                name: naa.52004567BA64678D
+                mountpoint: /srv/naa
+
+- name: Report the results
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Show the outcome of every case
+      ansible.builtin.debug:
+        msg:
+          "{{ '%-4s  %s' | format('PASS' if item.ok | bool else 'FAIL',
+          item.name) }}"
+      loop: "{{ molecule_case_results }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert every case behaved as the contract says
+      vars:
+        failed_cases:
+          "{{ molecule_case_results | selectattr('ok', 'falsy') | list }}"
+      ansible.builtin.assert:
+        that:
+          - failed_cases | length == 0
+        fail_msg: >-
+          {{ failed_cases | length }} of {{ molecule_case_results | length }}
+          cases failed: {% for case in failed_cases %} - {{ case.name }}: {{
+          case.detail | trim }} {% endfor %}
+        success_msg: >-
+          All {{ molecule_case_results | length }} cases behaved as the contract
+          says.

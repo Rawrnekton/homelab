@@ -1,0 +1,93 @@
+---
+# Default scenario: one initiator, one portal, two targets with CHAP.
+#
+# Goal: the homelab shape on role defaults. The portal is addressed by name,
+# so the resolution on the managed host is exercised; both targets share the
+# CHAP credentials; one target leaves `fstype` out, the other sets it.
+#
+# Two containers. `iscsi-target` serves the LUNs through LIO (see
+# resources/prepare.yml for why LIO and what that costs), `iscsi-initiator` is
+# where the role runs. Both are privileged systemd containers and both see the
+# host's /lib/modules, because both sides need kernel modules the container's
+# systemd did not load. The initiator also gets the host's /dev: the SCSI disk
+# behind a session appears in the host's devtmpfs, and the host's udev writes
+# the /dev/disk/by-path link the role waits for. A private /dev would never
+# show it. And it runs on the host network, because the kernel talks to iscsid
+# over a netlink socket that only exists in the host network namespace; the
+# target's name is written to its /etc/hosts in prepare, so the role still
+# resolves the portal on the managed host.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &container
+    name: iscsi-target
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: iscsi-molecule-default
+    network_mode: iscsi-molecule-default
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /lib/modules:/lib/modules:ro
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - target
+  - <<: *container
+    name: iscsi-initiator
+    # Host network, not the scenario's: the kernel answers iscsid over a
+    # netlink socket that exists in the host network namespace only. In a
+    # namespace of its own, iscsid dies at the first login.
+    networks: []
+    network_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /lib/modules:/lib/modules:ro
+      - /dev:/dev
+    groups:
+      - initiator
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+    cleanup: ../resources/cleanup.yml
+  inventory:
+    group_vars:
+      target:
+        molecule_lio_targets:
+          - name: default-data
+            iqn: iqn.2026-09.test.molecule:default:data
+            chap_user: molecule
+            chap_password: molecule-chap-secret
+          - name: default-snapshots
+            iqn: iqn.2026-09.test.molecule:default:snapshots
+            chap_user: molecule
+            chap_password: molecule-chap-secret
+      initiator:
+        iscsi_client_targets:
+          - name: molecule
+            portal: iscsi-target
+            targets:
+              - human_readable_name: data
+                name: iqn.2026-09.test.molecule:default:data
+                user: molecule
+                password: molecule-chap-secret
+                mountpoint: /var/lib/molecule/data
+              - human_readable_name: snapshots
+                name: iqn.2026-09.test.molecule:default:snapshots
+                user: molecule
+                password: molecule-chap-secret
+                mountpoint: /var/lib/molecule/snapshots
+                fstype: ext4
+verifier:
+  name: ansible

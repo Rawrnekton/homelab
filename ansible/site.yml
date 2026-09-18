@@ -11,7 +11,7 @@
   roles:
     - { role: haproxy, tags: [haproxy] }
     - { role: certbot, tags: [certbot] }
-    - { role: iscsi-client, tags: [iscsi-client] }
+    - { role: iscsi_client, tags: [iscsi_client] }
     - { role: garage, tags: [garage] }
 
 - name: Setup WireGuard tunnel between gateway and VPS
