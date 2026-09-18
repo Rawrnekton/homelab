@@ -32,6 +32,12 @@ review time. Do not merge a role branch to refresh the docs; edit them on the
 trunk. GitHub deletes the head branch on merge, so a branch that is still needed
 after its PR has to be pushed again.
 
+A change to `group_vars`, `host_vars` or `site.yml` that a rework needs (a
+renamed role, a renamed or reshaped variable) goes on the role branch, next to
+the role that needs it. The trunk only owns the inventory files that no rework
+is touching. This keeps the trunk mergeable into every role branch at any time,
+and keeps a variable rename in the same commit as the tasks that read it.
+
 ## 1. Lock the scope before writing tasks
 
 Write the in-scope and out-of-scope lists first, date them, and keep them in the
