@@ -12,11 +12,12 @@ reworked. The `k3s` role is the first one to satisfy that.
 
 ## Status
 
-| Role                                | State                                                                                                                                                           |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `k3s` (was `cluster-setup`)         | Reworked, feature-complete for v1.0.0, 10 molecule scenarios. On branch `refractor/cluster-setup`, not yet reviewed or merged.                                  |
-| `iscsi_client` (was `iscsi-client`) | Brought to the standard, no new features, 4 molecule scenarios against an LIO target in Docker. On branch `refractor/iscsi-client`, not yet reviewed or merged. |
-| everything else                     | As scored below.                                                                                                                                                |
+| Role                                | State                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `k3s` (was `cluster-setup`)         | Reworked, feature-complete for v1.0.0, 10 molecule scenarios. On branch `refractor/cluster-setup`, not yet reviewed or merged.                                                                                                                                                                           |
+| `iscsi_client` (was `iscsi-client`) | Brought to the standard, no new features, 4 molecule scenarios against an LIO target in Docker. On branch `refractor/iscsi-client`, not yet reviewed or merged.                                                                                                                                          |
+| `wireguard` + `ispconfig_proxy`     | Split as decided (2026-09-18). `wireguard` does VPN only, 4 molecule scenarios on the host kernel; `ispconfig_proxy` is new, 4 scenarios against a stub of the JSON API. `services` moved to `group_vars/all`. On branch `refractor/wireguard`, not yet run against the VPS, not yet reviewed or merged. |
+| everything else                     | As scored below.                                                                                                                                                                                                                                                                                         |
 
 ## How these are scored
 
@@ -58,8 +59,8 @@ quick the fix is. Every role below has a dated **Rework scope** block under its
 finding; a fresh session needs nothing but the role name (see "Starting a
 rework" in `CLAUDE.md`).
 
-1. **wireguard** - split into `wireguard` and `ispconfig_proxy`; the shape is in
-   "Cross-role decisions".
+1. ~~**wireguard**~~ - **done.** Split into `wireguard` and `ispconfig_proxy`
+   (2026-09-18); see the Status table above and the two `roles/*/CLAUDE.md`.
 2. **haproxy** - the var schema is replaced by the `services` shape and named
    pools.
 3. ~~**cluster-setup**~~ - **done.** Rebuilt as `k3s` (2026-08/09); see the
@@ -442,6 +443,16 @@ variable.
 
 ## wireguard — 2
 
+> **Resolved.** Split into `wireguard` and `ispconfig_proxy` on branch
+> `refractor/wireguard` (2026-09-18), as decided below and in "Cross-role
+> decisions". `wireguard` manages `wg0` from per-host variables, generates its
+> keys with `creates` + `slurp`, and has `wireguard_state: absent`;
+> `ispconfig_proxy` keeps one site with alias domains through the JSON API and
+> refuses names it does not own. `ispconfig_proxy` was the first consumer of the
+> `services` shape, so the list moved to `group_vars/all/services.yml` on that
+> branch. The 2026-07 finding is kept below, because it is the reason the rework
+> happened.
+>
 > **Rework scope (locked 2026-09-18).** Split into `wireguard` and
 > `ispconfig_proxy`; the shape of both is in "Cross-role decisions" above.
 > `wireguard_state: absent` is in scope so a rebuild is testable. Molecule for
