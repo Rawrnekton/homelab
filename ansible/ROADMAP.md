@@ -81,16 +81,21 @@ block (below, under its finding) points here instead of repeating it.
 ### The `services` shape (decided 2026-09-18)
 
 "A service this homelab exposes" is declared once, in `group_vars/all`, and read
-by `dns`, `haproxy` and the ISPConfig proxy role that comes out of the
-`wireguard` split. `certbot` does not read it; certificates are their own list.
+by `dns`, `haproxy` and `ispconfig_proxy`. `certbot` does not read it;
+certificates are their own list.
 
 ```yaml
 # group_vars/all/services.yml
 services:
   - name: mealie.cindergla.de # the full FQDN, the key everywhere
     dns_target: 192.168.2.170 # the A record the dns role writes
-    backend: argo-cluster # a haproxy pool by name; absent = DNS record only
+    backend: argo-cluster # a haproxy pool by name, always required
     external: true # a vhost on the VPS; default false
+  - name: mqtt.cindergla.de
+    dns_target: 192.168.2.170
+    mode: tcp # default https; tcp = own frontend, TCP passthrough
+    listen_port: 1883 # only with mode tcp
+    backend: argo-mqtt
 
 certificates:
   - name: wildcard-cindergla-de # the lineage and PEM file name
@@ -99,22 +104,46 @@ certificates:
     domains: ["rancher.k8s.internal.cindergla.de"]
 ```
 
+```yaml
+# group_vars/homelab/haproxy.yml: the pools, a haproxy concept
+haproxy_backends:
+  - name: argo-cluster
+    servers: [192.168.2.171, 192.168.2.172, 192.168.2.173]
+    port: 443
+    ssl: true
+    ssl_verify: false
+    health_check: true
+  - name: argo-mqtt
+    servers: [192.168.2.171, 192.168.2.172, 192.168.2.173]
+    port: 31883
+    health_check: true
+```
+
 - **`name` is the full FQDN.** No base-domain variable and no label-plus-suffix
   assembly; `dns_domain_suffix` and `haproxy_base_domain` go away. Repeating the
   domain in every entry is the accepted price for a second domain or a
   multi-level name working without a special case. An earlier attempt to be
   clever about this failed and never reached git.
-- **`backend` names a pool that `haproxy` declares.** Pools are a `haproxy`
-  concept (servers, port, TLS, health check), services only point at one. There
-  is **no default pool**: every routed service names its pool, so the file says
-  where traffic goes without knowing a fallback rule. A service without
-  `backend` is a DNS record and nothing else (`mqtt.cindergla.de` today, added
-  by hand on the Pi-hole). The reason for named pools is that the gateway is a
-  single point of failure and a detached monitoring host is the next project;
-  its services must not route through the cluster pool.
+- **`backend` names a pool that `haproxy` declares, and every service sets it.**
+  A pool is servers, one port, TLS towards the servers, and the health check.
+  Services only point at one. There is **no default pool**: the file says where
+  traffic goes without a fallback rule. The reason for named pools is that the
+  gateway is a single point of failure and a detached monitoring host is the
+  next project; its services must not route through the cluster pool.
+- **`mode` is `https` (default) or `tcp`, and it is explicit.** An `https`
+  service is matched by its name in the Host header on the shared port 443
+  frontend. A `tcp` service gets its own frontend on `listen_port` in TCP mode
+  with its pool as `default_backend`; this is what `haproxy_tcp_services`
+  rendered before, with the DNS record it was missing. A pool's HAProxy mode
+  follows the services that name it; a pool named by both modes fails
+  validation, because HAProxy needs two backend blocks for that. `listen_port`
+  is only valid with `mode: tcp`, must be unique, and must not be 80 or 443.
+  `external: true` on a `tcp` service fails validation: the VPS vhost is an HTTP
+  reverse proxy.
 - **`external` is one boolean, default `false`.** `true` means exactly: the VPS
   gets a vhost for the name and proxies it through the tunnel to the gateway.
   There is no third state.
+- **Every service gets a DNS record**, whatever its mode.
 - **Certificates are a list of their own, not derived from `services`.** One
   entry is one certbot lineage and one PEM under `/etc/haproxy/ssl/`. An entry
   may hold a wildcard, one name, or several names. The recommended layout is one
@@ -123,16 +152,50 @@ certificates:
   certificate is possible with the same shape but not recommended: every added
   name re-issues the whole certificate. HAProxy picks the certificate by SNI
   from the directory, so no service-to-certificate mapping exists anywhere.
-  `haproxy` (or `certbot`) asserts that every service with a `backend` is
-  matched by some `certificates[].domains` entry, a wildcard matching exactly
-  one label; a name nobody issues a certificate for fails the run instead of
-  keeping a self-signed placeholder forever.
-- **TCP passthrough stays a `haproxy`-only concept** (`haproxy_tcp_services`,
-  with independent listen and backend ports as today). Those are ports, not
-  names, and nothing else needs them.
-- **The VPS proxies all external services through one vhost** with the other
-  names as aliases, not one vhost per service. Separate vhosts were only the
-  first thing that worked.
+  `haproxy` asserts that every `https` service is matched by some
+  `certificates[].domains` entry, a wildcard matching exactly one label; a name
+  nobody issues a certificate for fails the run instead of keeping a self-signed
+  placeholder forever.
+- **Open:** whether port 443 keeps a `default_backend` for names that match no
+  ACL (today `is_default: true` on the cluster pool). Recommendation: drop it,
+  an unknown name gets a 503. Decision pending.
+
+### The `wireguard` split (decided 2026-09-18)
+
+`roles/wireguard` today is a VPN role and an ISPConfig provisioning role in one
+file. It becomes two roles:
+
+- **`wireguard`** manages one interface (`wg0`) per host and nothing else.
+  - Each host declares its own `wireguard_address` and, on a host that listens,
+    `wireguard_listen_port`, in `host_vars`. Nothing in the role knows which
+    host is "the server".
+  - Peers are two lists, because they are two kinds of things:
+    `wireguard_peer_hosts` holds inventory names of managed hosts, whose public
+    key the role reads from their facts (so both ends are in the same play, as
+    today); `wireguard_peers` holds static peers with `name`, `public_key` and
+    `allowed_ips` (the road warriors). Endpoint and keepalive are per peer where
+    they apply.
+  - Keys are generated on the host on the first run and are never in the
+    inventory. The private key is written with `creates` and read back with
+    `slurp`; the public key is derived from it. This closes the two `# TODO`
+    comments on `changed_when`.
+  - IP forwarding is a boolean the relaying host sets, not a group test.
+  - `wireguard_state: absent` is **in scope**, so a rebuild is testable:
+    interface down, config and keys removed, package left alone.
+- **`ispconfig_proxy`** creates the reverse-proxy vhost on the VPS for every
+  service with `external: true`.
+  - It runs on the `vps` host and calls the ISPConfig JSON API there, with plain
+    `uri` tasks and no delegation to the controller.
+  - It reads the vhost first, creates it if missing, and updates it when the
+    alias list or the Apache directives differ. Deleting the vhost when the last
+    external service leaves is out.
+  - One vhost carries all external names, the first as the domain and the rest
+    as aliases. One vhost per service was only the first thing that worked.
+  - The upstream (`https://10.0.0.2/`, the gateway's tunnel address) is an
+    explicit variable `ispconfig_proxy_upstream` in `group_vars/vps`, with a
+    comment saying what it is. It is not derived from the `wireguard` variables;
+    that link would be the kind of clever the owner does not want to decode in
+    six months.
 
 ---
 
