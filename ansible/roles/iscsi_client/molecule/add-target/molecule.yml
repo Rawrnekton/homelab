@@ -1,0 +1,94 @@
+---
+# Add-target scenario: one initiator, one portal, a second target on re-run.
+#
+# Goal: a re-run with a new target in the list logs in to the new one and
+# leaves the session of the old one alone. That is the promise of avoiding
+# sendtargets discovery, and a green first run cannot show it.
+#
+# converge runs the role with one target. side_effect records the session of
+# that target, then runs the role again with two. verify checks that both are
+# mounted and that the first session still has the SID it had before.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &container
+    name: iscsi-target
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: iscsi-molecule-add-target
+    network_mode: iscsi-molecule-add-target
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /lib/modules:/lib/modules:ro
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - target
+  - <<: *container
+    name: iscsi-initiator
+    # Host network, not the scenario's: the kernel answers iscsid over a
+    # netlink socket that exists in the host network namespace only. In a
+    # namespace of its own, iscsid dies at the first login.
+    networks: []
+    network_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /lib/modules:/lib/modules:ro
+      - /dev:/dev
+    groups:
+      - initiator
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+    cleanup: ../resources/cleanup.yml
+  inventory:
+    group_vars:
+      target:
+        molecule_lio_targets:
+          - name: add-target-first
+            iqn: iqn.2026-09.test.molecule:add-target:first
+            chap_user: molecule
+            chap_password: molecule-chap-secret
+          - name: add-target-second
+            iqn: iqn.2026-09.test.molecule:add-target:second
+            chap_user: molecule
+            chap_password: molecule-chap-secret
+      initiator:
+        # The first run. side_effect.yml carries the second, longer list.
+        iscsi_client_targets:
+          - name: molecule
+            portal: iscsi-target
+            targets:
+              - human_readable_name: first
+                name: iqn.2026-09.test.molecule:add-target:first
+                user: molecule
+                password: molecule-chap-secret
+                mountpoint: /var/lib/molecule/first
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy

@@ -1,0 +1,96 @@
+---
+# Fail fast, like the default scenario.
+- name: Verify
+  hosts: initiator
+  become: true
+  tasks:
+    - name: List the sessions
+      ansible.builtin.command:
+        cmd: iscsiadm -m session
+      register: sessions
+      changed_when: false
+
+    - name: Two sessions, one per portal, each at its own port
+      ansible.builtin.assert:
+        that:
+          - sessions.stdout_lines | length == 2
+          - sessions.stdout | regex_search(':3260,\d+
+            iqn.2026-09.test.molecule:portals:a( |$)') is not none
+          - sessions.stdout | regex_search(':3261,\d+
+            iqn.2026-09.test.molecule:portals:b( |$)') is not none
+        fail_msg: "Unexpected sessions: {{ sessions.stdout }}"
+
+    - name: Read the node records
+      ansible.builtin.command:
+        cmd: iscsiadm -m node -T {{ item }}
+      register: node_records
+      changed_when: false
+      loop:
+        - iqn.2026-09.test.molecule:portals:a
+        - iqn.2026-09.test.molecule:portals:b
+
+    - name: CHAP is on for the portal that needs it and off for the other
+      ansible.builtin.assert:
+        that:
+          - "'node.session.auth.authmethod = CHAP' in
+            node_records.results[0].stdout"
+          - "'node.session.auth.username = molecule-a' in
+            node_records.results[0].stdout"
+          - "'node.session.auth.authmethod = CHAP' not in
+            node_records.results[1].stdout"
+          - "'node.startup = automatic' in node_records.results[0].stdout"
+          - "'node.startup = automatic' in node_records.results[1].stdout"
+
+    - name: Read the mounts
+      ansible.builtin.setup:
+        gather_subset:
+          - mounts
+
+    - name: Both LUNs are mounted from their by-path device
+      vars:
+        mount:
+          "{{ ansible_facts.mounts | selectattr('mount', 'equalto',
+          item.mountpoint) | list }}"
+      ansible.builtin.assert:
+        that:
+          - mount | length == 1
+          - mount[0].fstype == 'ext4'
+          - "'rw' in mount[0].options"
+        fail_msg:
+          "{{ item.mountpoint }} is not mounted as expected: {{ mount }}"
+      loop:
+        - mountpoint: /var/lib/molecule/a
+        - mountpoint: /var/lib/molecule/b
+      loop_control:
+        label: "{{ item.mountpoint }}"
+
+    - name: Read fstab
+      ansible.builtin.slurp:
+        src: /etc/fstab
+      register: fstab
+
+    - name: The fstab lines carry the port of each portal
+      vars:
+        line_a: >-
+          ^/dev/disk/by-path/ip-[0-9.]+:3260-iscsi-iqn.2026-09.test.molecule:portals:a-lun-0
+          /var/lib/molecule/a\s
+        line_b: >-
+          ^/dev/disk/by-path/ip-[0-9.]+:3261-iscsi-iqn.2026-09.test.molecule:portals:b-lun-0
+          /var/lib/molecule/b\s
+      ansible.builtin.assert:
+        that:
+          - fstab.content | b64decode | regex_search(line_a, multiline=True) is
+            not none
+          - fstab.content | b64decode | regex_search(line_b, multiline=True) is
+            not none
+        fail_msg: "fstab: {{ fstab.content | b64decode }}"
+
+    - name: Write a file on both LUNs
+      ansible.builtin.copy:
+        content: "written by molecule\n"
+        dest: "{{ item }}/molecule.txt"
+        mode: "0644"
+      loop:
+        - /var/lib/molecule/a
+        - /var/lib/molecule/b
+      changed_when: false

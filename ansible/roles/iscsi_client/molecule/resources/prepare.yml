@@ -1,0 +1,204 @@
+---
+# Two kinds of host: the `target` group serves LUNs through LIO, the
+# `initiator` group is where the role runs.
+#
+# LIO is the in-kernel iSCSI target, so the target container drives the kernel
+# of the host through configfs. That is the only way to serve a disk at LUN 0
+# from a container: tgt, the user-space target, keeps LUN 0 for its controller
+# and the role expects the disk at LUN 0 (as the WD NAS in the homelab serves
+# it). The portal socket is created in the network namespace of the process
+# that writes it, so the target listens inside its container and the
+# initiator container reaches it over the scenario's Docker network.
+#
+# The price is that LIO state outlives the container. cleanup.yml removes what
+# this playbook creates, and the "leftover" tasks below cope with a run that
+# never reached cleanup.
+- name: Prepare every container
+  hosts: all
+  become: true
+  tasks:
+    # Docker's embedded DNS answers with AAAA records, but a container on a
+    # user-defined bridge network has no IPv6 route. apt then sits on a dead
+    # connection until it times out. Forcing IPv4 is the whole fix.
+    - name: Make apt use IPv4
+      ansible.builtin.copy:
+        content: 'Acquire::ForceIPv4 "true";'
+        dest: /etc/apt/apt.conf.d/99-molecule-force-ipv4
+        mode: "0644"
+
+    # The image has no kmod. Both sides need kernel modules the container's
+    # systemd did not load at boot, and the host's /lib/modules is mounted
+    # read-only into every container so that modprobe finds them.
+    - name: Install kmod
+      ansible.builtin.apt:
+        name: kmod
+        state: present
+        update_cache: true
+
+- name: Prepare the LIO targets
+  hosts: target
+  become: true
+  vars:
+    lio_backing_dir: /var/lib/molecule-lio
+  tasks:
+    - name: Install targetcli
+      ansible.builtin.apt:
+        name: targetcli-fb
+        state: present
+
+    - name: Load the LIO kernel modules
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - target_core_mod
+        - target_core_file
+        - iscsi_target_mod
+
+    - name: Mount configfs
+      ansible.posix.mount:
+        path: /sys/kernel/config
+        src: configfs
+        fstype: configfs
+        state: ephemeral
+
+    # targetcli-fb talks to a daemon by default and fails without one. The flag
+    # turns the preference off for good in this container.
+    - name: Make targetcli work without its daemon
+      ansible.builtin.command:
+        cmd: targetcli --disable-daemon
+      changed_when: true
+
+    # A target is created with a default portal on 0.0.0.0:3260. The scenarios
+    # choose their own port, so the default must not be added.
+    - name: Do not add a default portal to new targets
+      ansible.builtin.command:
+        cmd: targetcli set global auto_add_default_portal=false
+      changed_when: true
+
+    # LIO state is global to the kernel, so an earlier run that died before
+    # cleanup leaves its target and backstore behind. The names are
+    # per-scenario, so only this scenario's leftovers are touched.
+    - name: Remove a leftover target from an earlier run
+      ansible.builtin.command:
+        cmd: targetcli /iscsi delete {{ item.iqn }}
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.iqn }}"
+      register: leftover_target
+      changed_when: leftover_target.rc == 0
+      failed_when: false
+
+    - name: Remove a leftover backstore from an earlier run
+      ansible.builtin.command:
+        cmd: targetcli /backstores/fileio delete {{ item.name }}
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: leftover_backstore
+      changed_when: leftover_backstore.rc == 0
+      failed_when: false
+
+    - name: Create the directory for the backing files
+      ansible.builtin.file:
+        path: "{{ lio_backing_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Create a backing file per target
+      community.general.filesize:
+        path: "{{ lio_backing_dir }}/{{ item.name }}.img"
+        size: "{{ item.size | default('64M') }}"
+        mode: "0600"
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # targetcli is the tool LIO ships; there is no module for it. Every call
+    # below is a plain create, and prepare runs once per scenario, so the
+    # calls report changed without a check.
+    - name: Create the fileio backstores
+      ansible.builtin.command:
+        cmd: >-
+          targetcli /backstores/fileio create {{ item.name }} {{ lio_backing_dir
+          }}/{{ item.name }}.img
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: true
+
+    - name: Create the targets
+      ansible.builtin.command:
+        cmd: targetcli /iscsi create {{ item.iqn }}
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.iqn }}"
+      changed_when: true
+
+    - name: Put the backstore at LUN 0 of its target
+      ansible.builtin.command:
+        cmd: >-
+          targetcli /iscsi/{{ item.iqn }}/tpg1/luns create /backstores/fileio/{{
+          item.name }}
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.iqn }}"
+      changed_when: true
+
+    - name: Open the portal on the scenario's port
+      ansible.builtin.command:
+        cmd: >-
+          targetcli /iscsi/{{ item.iqn }}/tpg1/portals create 0.0.0.0 {{
+          item.port | default(3260) }}
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.iqn }}:{{ item.port | default(3260) }}"
+      changed_when: true
+
+    # Demo mode: any initiator may log in, without an ACL per initiator IQN.
+    # authentication=1 then means "CHAP with the credentials set on the TPG",
+    # authentication=0 means no CHAP at all.
+    - name: Let any initiator log in, with or without CHAP
+      ansible.builtin.command:
+        cmd: >-
+          targetcli /iscsi/{{ item.iqn }}/tpg1 set attribute
+          generate_node_acls=1 cache_dynamic_acls=1 demo_mode_write_protect=0
+          authentication={{ 1 if item.chap_user is defined else 0 }}
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.iqn }}"
+      changed_when: true
+
+    - name: Set the CHAP credentials
+      ansible.builtin.command:
+        cmd: >-
+          targetcli /iscsi/{{ item.iqn }}/tpg1 set auth userid={{ item.chap_user
+          }} password={{ item.chap_password }}
+      loop: "{{ molecule_lio_targets }}"
+      loop_control:
+        label: "{{ item.iqn }}"
+      when: item.chap_user is defined
+      changed_when: true
+      no_log: true
+
+- name: Prepare the initiators
+  hosts: initiator
+  become: true
+  tasks:
+    # The initiator runs on the host network (see the scenario's molecule.yml),
+    # where Docker's embedded DNS does not answer. Docker manages /etc/hosts
+    # as a bind mount, which cannot be replaced atomically: hence unsafe_writes.
+    - name: Make the targets resolvable by name
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "{{ hostvars[item].ansible_default_ipv4.address }} {{ item }}"
+        unsafe_writes: true
+      loop: "{{ groups['target'] }}"
+
+    # open-iscsi ships a modules-load.d entry for iscsi_tcp, but the container's
+    # systemd ran that step at boot, before the role installs the package.
+    # On a real host the reboot after the install does it.
+    - name: Load the iSCSI initiator transport
+      community.general.modprobe:
+        name: iscsi_tcp
+        state: present

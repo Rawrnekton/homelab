@@ -1,0 +1,89 @@
+---
+# Cross-field rules that meta/argument_specs.yml cannot express. Types,
+# required keys and unknown keys are already rejected by the argument spec
+# before this file runs.
+- name: Collect every target across all portals
+  ansible.builtin.set_fact:
+    iscsi_client_all_targets: >-
+      {{ iscsi_client_targets | subelements('targets') | map('last') | list }}
+
+- name: Validate portal names are unique
+  vars:
+    portal_names: "{{ iscsi_client_targets | map(attribute='name') | list }}"
+  ansible.builtin.assert:
+    that:
+      - portal_names | unique | length == portal_names | length
+    fail_msg: >-
+      Every portal in iscsi_client_targets needs a unique name. Got: {{
+      portal_names }}
+
+- name: Validate the portal port is a TCP port
+  vars:
+    bad_ports: >-
+      {{ iscsi_client_targets | selectattr('port', 'defined')
+         | rejectattr('port', 'in', range(1, 65536)) | map(attribute='name') |
+      list }}
+  ansible.builtin.assert:
+    that:
+      - bad_ports | length == 0
+    fail_msg: >-
+      The port of a portal must be between 1 and 65535. Portals with an invalid
+      port: {{ bad_ports }}
+
+- name: Validate the target names are IQNs
+  vars:
+    iqn_pattern: '^(iqn\.\d{4}-\d{2}\.[a-z0-9][a-z0-9.-]*(:[^\s]+)?|eui\.[0-9a-fA-F]{16}|naa\.[0-9a-fA-F]{16}([0-9a-fA-F]{16})?)$'
+    bad_iqns: >-
+      {{ iscsi_client_all_targets | map(attribute='name')
+         | reject('match', iqn_pattern) | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_iqns | length == 0
+    fail_msg: >-
+      The name of a target must be an iSCSI qualified name
+      (iqn.YYYY-MM.reversed.domain:label, eui.<16 hex> or naa.<16 or 32 hex>).
+      Got: {{ bad_iqns }}
+
+- name: Validate a target appears once per portal
+  vars:
+    duplicate_targets: >-
+      {%- set result = [] -%} {%- for portal in iscsi_client_targets -%}
+        {%- set names = portal.targets | map(attribute='name') | list -%}
+        {%- for name in names | unique if names.count(name) > 1 -%}
+          {%- set _ = result.append(portal.name ~ ' -> ' ~ name) -%}
+        {%- endfor -%}
+      {%- endfor -%} {{ result }}
+  ansible.builtin.assert:
+    that:
+      - duplicate_targets | length == 0
+    fail_msg: >-
+      A target IQN may appear only once per portal. Duplicates: {{
+      duplicate_targets }}
+
+- name: Validate the CHAP credentials come in pairs
+  vars:
+    half_chap: >-
+      {{ (iscsi_client_all_targets | selectattr('user', 'defined')
+          | rejectattr('password', 'defined') | map(attribute='name') | list)
+         + (iscsi_client_all_targets | selectattr('password', 'defined')
+          | rejectattr('user', 'defined') | map(attribute='name') | list) }}
+  ansible.builtin.assert:
+    that:
+      - half_chap | length == 0
+    fail_msg: >-
+      A target sets both user and password (CHAP on) or neither (CHAP off),
+      never one of them. Targets with half a credential: {{ half_chap }}
+
+- name: Validate the mountpoints are absolute and unique
+  vars:
+    mountpoints:
+      "{{ iscsi_client_all_targets | map(attribute='mountpoint') | list }}"
+    relative_mountpoints: "{{ mountpoints | reject('match', '^/') | list }}"
+  ansible.builtin.assert:
+    that:
+      - relative_mountpoints | length == 0
+      - mountpoints | unique | length == mountpoints | length
+    fail_msg: >-
+      Every mountpoint must be an absolute path and no two targets may share
+      one. Relative: {{ relative_mountpoints }}. All mountpoints: {{ mountpoints
+      }}

@@ -1,0 +1,40 @@
+---
+# Record the session of the first target, then run the role with a second
+# target added. The play's vars sit above the group_vars of the scenario, so
+# the longer list wins here and nowhere else.
+- name: Record the sessions before the re-run
+  hosts: initiator
+  become: true
+  tasks:
+    - name: List the sessions
+      ansible.builtin.command:
+        cmd: iscsiadm -m session
+      register: sessions_before
+      changed_when: false
+
+    - name: Keep the list for verify
+      ansible.builtin.copy:
+        content: "{{ sessions_before.stdout }}\n"
+        dest: /root/molecule-sessions-before
+        mode: "0600"
+
+- name: Re-run the role with a second target
+  hosts: initiator
+  become: true
+  vars:
+    iscsi_client_targets:
+      - name: molecule
+        portal: iscsi-target
+        targets:
+          - human_readable_name: first
+            name: iqn.2026-09.test.molecule:add-target:first
+            user: molecule
+            password: molecule-chap-secret
+            mountpoint: /var/lib/molecule/first
+          - human_readable_name: second
+            name: iqn.2026-09.test.molecule:add-target:second
+            user: molecule
+            password: molecule-chap-secret
+            mountpoint: /var/lib/molecule/second
+  roles:
+    - role: iscsi_client

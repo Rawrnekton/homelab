@@ -1,0 +1,20 @@
+---
+# Shared by every scenario through a symlink (molecule looks for
+# collections.yml inside the scenario directory and ignores a
+# requirements-file option pointing elsewhere).
+#
+# community.docker is required by the docker driver's own create/destroy
+# playbooks (molecule_plugins.docker), not by the role.
+# community.general, ansible.posix and ansible.utils are role dependencies:
+# open_iscsi and filesystem, mount, and the ipaddr test on the portal address.
+# The prepare playbook also uses community.general (modprobe, filesize) and
+# ansible.posix (mount, for configfs).
+collections:
+  - name: community.docker
+    version: ">=3.10.2"
+  - name: community.general
+    version: ">=8.0.0"
+  - name: ansible.posix
+    version: ">=1.5.0"
+  - name: ansible.utils
+    version: ">=2.0.0"

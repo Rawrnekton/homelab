@@ -1,0 +1,40 @@
+---
+# Run the role's input validation with the vars the caller set on the include,
+# and record whether it rejected them for the right reason.
+#
+# Caller contract:
+#   case_name   - human name of the case, used in the report
+#   case_expect - substring that must appear in the rejection message
+#   plus iscsi_client_targets under test
+#
+# A case never fails the play on its own. Every outcome is appended to
+# molecule_case_results, and the report play at the end of converge.yml fails
+# once with the full table. Otherwise the first broken case would hide all the
+# cases behind it.
+- name: "Case: {{ case_name }}"
+  block:
+    - name: "Submit input: {{ case_name }}"
+      ansible.builtin.include_tasks: validate.yml
+
+    - name: "Record that the input passed validation: {{ case_name }}"
+      ansible.builtin.set_fact:
+        case_outcome:
+          name: "{{ case_name }}"
+          ok: false
+          detail: validation accepted an input it must reject
+  rescue:
+    - name: "Record how the input was rejected: {{ case_name }}"
+      vars:
+        failure_message: "{{ ansible_failed_result.msg | default('') }}"
+      ansible.builtin.set_fact:
+        case_outcome:
+          name: "{{ case_name }}"
+          ok: "{{ case_expect in failure_message }}"
+          detail: >-
+            expected '{{ case_expect }}' in the rejection message, got: {{
+            failure_message | trim }}
+  always:
+    - name: "Add the outcome to the tally: {{ case_name }}"
+      ansible.builtin.set_fact:
+        molecule_case_results:
+          "{{ molecule_case_results | default([]) + [case_outcome] }}"

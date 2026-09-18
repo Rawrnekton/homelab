@@ -1,0 +1,13 @@
+---
+# Shared by every scenario. The first play only gathers facts on the targets:
+# a scenario that addresses a portal by IP address reads it out of hostvars.
+- name: Gather facts on the targets
+  hosts: target
+  gather_facts: true
+  tasks: []
+
+- name: Converge
+  hosts: initiator
+  become: true
+  roles:
+    - role: iscsi_client

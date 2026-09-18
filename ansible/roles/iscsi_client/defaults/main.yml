@@ -1,0 +1,20 @@
+---
+# The portals to log in to and the targets to mount from each. Empty by
+# default: there is no sane portal to point at, so the role does nothing until
+# the inventory fills the list. meta/argument_specs.yml describes every key.
+iscsi_client_targets: []
+
+# The shape, as an example. `port` and `fstype` are optional; `user` and
+# `password` go together and switch CHAP on for that target.
+#
+# iscsi_client_targets:
+#   - name: nas                          # label, used in task output
+#     portal: nas.example.internal       # IP or FQDN, resolved on the managed host
+#     port: 3260                         # 3260 when omitted
+#     targets:
+#       - human_readable_name: data      # label, used in task output
+#         name: iqn.2013-03.com.wdc:nas:data
+#         user: chap-user
+#         password: "{{ vault_iscsi_client_data_password }}"
+#         mountpoint: /srv/data
+#         fstype: ext4                   # ext4 when omitted

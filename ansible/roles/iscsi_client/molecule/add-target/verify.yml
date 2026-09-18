@@ -1,0 +1,51 @@
+---
+- name: Verify
+  hosts: initiator
+  become: true
+  tasks:
+    - name: List the sessions after the re-run
+      ansible.builtin.command:
+        cmd: iscsiadm -m session
+      register: sessions_after
+      changed_when: false
+
+    - name: Read the sessions from before the re-run
+      ansible.builtin.slurp:
+        src: /root/molecule-sessions-before
+      register: sessions_before
+
+    # A line of `iscsiadm -m session` carries the SID in brackets:
+    #   tcp: [3] 172.18.0.2:3260,1 iqn...:first (non-flash)
+    # The same line after the re-run means the session was never dropped.
+    - name: The first session is untouched and the second one is new
+      vars:
+        before: "{{ sessions_before.content | b64decode | trim | split('\n') }}"
+        first_line: "{{ before | select('search', 'add-target:first') | list }}"
+      ansible.builtin.assert:
+        that:
+          - before | length == 1
+          - sessions_after.stdout_lines | length == 2
+          - first_line[0] in sessions_after.stdout_lines
+          - sessions_after.stdout | regex_search('add-target:second( |$)') is
+            not none
+        fail_msg: >-
+          before: {{ before }} -- after: {{ sessions_after.stdout_lines }}
+
+    - name: Read the mounts
+      ansible.builtin.setup:
+        gather_subset:
+          - mounts
+
+    - name: Both LUNs are mounted
+      vars:
+        mount:
+          "{{ ansible_facts.mounts | selectattr('mount', 'equalto', item) | list
+          }}"
+      ansible.builtin.assert:
+        that:
+          - mount | length == 1
+          - mount[0].fstype == 'ext4'
+        fail_msg: "{{ item }} is not mounted: {{ mount }}"
+      loop:
+        - /var/lib/molecule/first
+        - /var/lib/molecule/second

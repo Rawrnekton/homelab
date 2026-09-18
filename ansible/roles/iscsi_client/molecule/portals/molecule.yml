@@ -1,0 +1,92 @@
+---
+# Portals scenario: one initiator, two portals on one target container.
+#
+# Goal: every portal-level option at once, in the two shapes the default
+# scenario does not cover.
+#   - portal a is addressed by name, listens on 3260 and needs CHAP.
+#   - portal b is addressed by IP address (read out of the target's facts in
+#     converge), listens on 3261 and takes any initiator without CHAP.
+# The by-path device the role waits for carries the address and the port, so
+# both are proven by the mount coming up.
+#
+# One target container, not two: LIO is global to the kernel, and targetcli
+# in a second container trips over the backstore file that only the first
+# container can see. Two portals on two ports of one container are two
+# portals to the role all the same: two node records, two sessions, two
+# by-path links.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &container
+    name: iscsi-target
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: iscsi-molecule-portals
+    network_mode: iscsi-molecule-portals
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /lib/modules:/lib/modules:ro
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - target
+  - <<: *container
+    name: iscsi-initiator
+    # Host network, not the scenario's: the kernel answers iscsid over a
+    # netlink socket that exists in the host network namespace only. In a
+    # namespace of its own, iscsid dies at the first login.
+    networks: []
+    network_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /lib/modules:/lib/modules:ro
+      - /dev:/dev
+    groups:
+      - initiator
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+    cleanup: ../resources/cleanup.yml
+  inventory:
+    group_vars:
+      target:
+        molecule_lio_targets:
+          - name: portals-a
+            iqn: iqn.2026-09.test.molecule:portals:a
+            chap_user: molecule-a
+            chap_password: molecule-chap-secret-a
+          - name: portals-b
+            iqn: iqn.2026-09.test.molecule:portals:b
+            port: 3261
+      initiator:
+        iscsi_client_targets:
+          - name: by-name-with-chap
+            portal: iscsi-target
+            targets:
+              - human_readable_name: a
+                name: iqn.2026-09.test.molecule:portals:a
+                user: molecule-a
+                password: molecule-chap-secret-a
+                mountpoint: /var/lib/molecule/a
+          - name: by-ip-without-chap
+            portal:
+              "{{ hostvars['iscsi-target']['ansible_default_ipv4']['address'] }}"
+            port: 3261
+            targets:
+              - human_readable_name: b
+                name: iqn.2026-09.test.molecule:portals:b
+                mountpoint: /var/lib/molecule/b
+verifier:
+  name: ansible

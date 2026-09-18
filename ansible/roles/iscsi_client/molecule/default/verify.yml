@@ -1,0 +1,123 @@
+---
+# Fail fast: once a session is missing, the assertions behind it mean nothing.
+- name: Verify
+  hosts: initiator
+  become: true
+  vars:
+    portal_port: 3260
+  tasks:
+    - name: Read the service state
+      ansible.builtin.service_facts:
+
+    - name: The initiator runs and logs in at boot
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['iscsid.service'].state == 'running'
+          - ansible_facts.services['iscsid.service'].status == 'enabled'
+          - ansible_facts.services['open-iscsi.service'].status == 'enabled'
+
+    - name: List the sessions
+      ansible.builtin.command:
+        cmd: iscsiadm -m session
+      register: sessions
+      changed_when: false
+
+    - name: One session per target, at the portal's resolved address
+      ansible.builtin.assert:
+        that:
+          - sessions.stdout_lines | length == iscsi_client_targets[0].targets |
+            length
+          - sessions.stdout | regex_search(':' ~ portal_port ~ ',\d+ ' ~
+            item.name ~ '( |$)') is not none
+        fail_msg: "No session for {{ item.name }} in: {{ sessions.stdout }}"
+      loop: "{{ iscsi_client_targets[0].targets }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # The point of avoiding sendtargets discovery: the CHAP credentials and
+    # node.startup survive in the node record after the role ran (twice, the
+    # idempotence step comes before verify).
+    - name: Read the node records
+      ansible.builtin.command:
+        cmd: iscsiadm -m node -T {{ item.name }}
+      register: node_records
+      changed_when: false
+      loop: "{{ iscsi_client_targets[0].targets }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: The node records keep CHAP and automatic startup
+      ansible.builtin.assert:
+        that:
+          - "'node.startup = automatic' in item.stdout"
+          - "'node.session.auth.authmethod = CHAP' in item.stdout"
+          - "'node.session.auth.username = molecule' in item.stdout"
+        fail_msg:
+          "Node record of {{ item.item.name }} lost its settings: {{ item.stdout
+          }}"
+      loop: "{{ node_records.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Read the mounts
+      ansible.builtin.setup:
+        gather_subset:
+          - mounts
+
+    # _netdev is not asserted here: it is an fstab-only option that the kernel
+    # never reports in the mount table. The fstab check below covers it.
+    - name: Every LUN is mounted at its mountpoint as ext4, writable
+      vars:
+        mount:
+          "{{ ansible_facts.mounts | selectattr('mount', 'equalto',
+          item.mountpoint) | list }}"
+      ansible.builtin.assert:
+        that:
+          - mount | length == 1
+          - mount[0].fstype == 'ext4'
+          - "'rw' in mount[0].options"
+        fail_msg:
+          "{{ item.mountpoint }} is not mounted as expected: {{ mount }}"
+      loop: "{{ iscsi_client_targets[0].targets }}"
+      loop_control:
+        label: "{{ item.mountpoint }}"
+
+    - name: Read fstab
+      ansible.builtin.slurp:
+        src: /etc/fstab
+      register: fstab
+
+    - name: The mounts persist across a reboot
+      vars:
+        fstab_line: >-
+          ^/dev/disk/by-path/ip-[0-9.]+:{{ portal_port }}-iscsi-{{ item.name
+          }}-lun-0 {{ item.mountpoint }} ext4 .*_netdev.*nofail
+      ansible.builtin.assert:
+        that:
+          - fstab.content | b64decode | regex_search(fstab_line, multiline=True)
+            is not none
+        fail_msg:
+          "No fstab line for {{ item.mountpoint }}: {{ fstab.content | b64decode
+          }}"
+      loop: "{{ iscsi_client_targets[0].targets }}"
+      loop_control:
+        label: "{{ item.mountpoint }}"
+
+    - name: Write a file on every LUN
+      ansible.builtin.copy:
+        content: "written by molecule\n"
+        dest: "{{ item.mountpoint }}/molecule.txt"
+        mode: "0644"
+      loop: "{{ iscsi_client_targets[0].targets }}"
+      loop_control:
+        label: "{{ item.mountpoint }}"
+      changed_when: false
+
+    - name: The file is on the LUN, not on the root filesystem
+      ansible.builtin.stat:
+        path: "{{ item.mountpoint }}/molecule.txt"
+      register: written
+      failed_when: not written.stat.exists
+      loop: "{{ iscsi_client_targets[0].targets }}"
+      loop_control:
+        label: "{{ item.mountpoint }}"
