@@ -156,9 +156,11 @@ haproxy_backends:
   `certificates[].domains` entry, a wildcard matching exactly one label; a name
   nobody issues a certificate for fails the run instead of keeping a self-signed
   placeholder forever.
-- **Open:** whether port 443 keeps a `default_backend` for names that match no
-  ACL (today `is_default: true` on the cluster pool). Recommendation: drop it,
-  an unknown name gets a 503. Decision pending.
+- **Port 443 has no `default_backend`.** `is_default: true` goes away and no
+  `haproxy_default_backend` variable replaces it. A name that matches no ACL
+  gets a 503, which is the signal that a `services` entry is missing. A name
+  that relied on the fallback (`rancher.k8s.internal.cindergla.de` is in no list
+  today) becomes an entry.
 
 ### The `wireguard` split (decided 2026-09-18)
 
@@ -255,6 +257,16 @@ README), but that's a documentation nit, not a scoring one.
 
 ## dns — 7
 
+> **Rework scope (locked 2026-09-18).** Bring to the standard. In: one A record
+> per `services[]` entry, written from the full FQDN and `dns_target`;
+> `dns_state: absent` removes the block. Out: installing or configuring Pi-hole
+> in any other way. The write mechanism stays `blockinfile` on
+> `/etc/pihole/custom.list`, because the host runs Pi-hole 5.18.2. **Flag:**
+> Pi-hole 6 moved local records into `pihole.toml`, so this role stops working
+> the day the Pi-hole is upgraded; the upgrade and the Pi-hole rework are a
+> later project, not part of this one. `dns_services` and `dns_domain_suffix` go
+> away; the role reads `services` as decided in "Cross-role decisions".
+
 **Why:** `blockinfile` + a restart-and-wait-for-port-53 handler is exactly the
 right amount of mechanism for "render some lines into a file."
 
@@ -290,6 +302,18 @@ one.
 
 ## haproxy — 4
 
+> **Rework scope (locked 2026-09-18).** The variable schema is replaced by the
+> `services` shape and the `haproxy_backends` pools from "Cross-role decisions";
+> the config generation itself is kept. In: the shared port 443 frontend with
+> one ACL per `https` service and no `default_backend`; one TCP frontend per
+> `tcp` service; pools with mode derived from their services; self-signed
+> placeholder PEMs keyed on `certificates[]` so HAProxy starts before `certbot`
+> has run; the assertion that every `https` service is covered by a certificate
+> entry; port 80 as a redirect to HTTPS only; `haproxy_state: absent` (package,
+> config, certificate directory). Out: variables for timeouts, `maxconn` and
+> ciphers (they stay fixed in the template); the ACME HTTP challenge; a stats
+> page; any default route.
+
 **Why:** the Jinja templating itself (ACL generation, backend/frontend assembly,
 TCP passthrough services) is competent and not the problem.
 
@@ -313,6 +337,23 @@ instinct: the mechanism (HAProxy config generation) is fine, the data model
 bolted onto it isn't.
 
 ## certbot — 3
+
+> **Rework scope (locked 2026-09-18).** Rebuilt without Docker. In: certbot and
+> `certbot-dns-netcup` in one native virtual environment (`pipx` or `venv`); one
+> lineage per `certificates[]` entry, issued with `-d` per domain; renewal
+> through certbot's own systemd timer; **one** English deploy-hook script that
+> writes `privkey.pem` + `fullchain.pem` to
+> `/etc/haproxy/ssl/<certificates[].name>.pem` and reloads HAProxy, replacing
+> the cron job, `new_cert.sh` and the three copies of the name logic; the netcup
+> customer id, API key and API password as vault variables rendered into the
+> credentials file; email, propagation wait and ACME server URL as variables
+> with defaults; `certbot_authenticator` (default `dns-netcup`, `manual` with
+> hook scripts allowed) so molecule can issue against a Pebble ACME server in
+> Docker; cleanup of lineages and PEMs that are not in `certificates`;
+> `certbot_state: absent` (venv, timer, hook, lineages). Out: Docker, the git
+> clone and image build, the Raspbian apt repository, the HTTP challenge. The
+> netcup path itself gets one manual verification against the real gateway;
+> nothing else on the gateway needs Docker, so it goes.
 
 **Why it's low despite working:** the "take a lineage's `privkey.pem` +
 `fullchain.pem` and cat them into `/etc/haproxy/ssl/<name>.pem`" operation is
@@ -354,6 +395,13 @@ inline while Rancher's is parametrized - no consistent policy on what gets a
 variable.
 
 ## wireguard — 2
+
+> **Rework scope (locked 2026-09-18).** Split into `wireguard` and
+> `ispconfig_proxy`; the shape of both is in "Cross-role decisions" above.
+> `wireguard_state: absent` is in scope so a rebuild is testable. Molecule for
+> `wireguard`: two containers as the two tunnel ends, and a scenario with a
+> static peer. Molecule for `ispconfig_proxy`: a stub of the ISPConfig JSON API
+> in a container, since the real one is not reachable from a test.
 
 **Why it's the floor:** roughly half of `tasks/main.yml` has nothing to do with
 WireGuard - it logs into an ISPConfig install over its remote JSON API and
