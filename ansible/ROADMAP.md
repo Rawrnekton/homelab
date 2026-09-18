@@ -2,11 +2,21 @@
 
 A scored snapshot of every role under `roles/`, taken 2026-07, to use when
 deciding what to rework and in what order. Scores are subjective on purpose.
+The scores below are the 2026-07 reading and are **not** re-scored as roles
+are reworked; a reworked role gets a status line instead.
 
 Explicitly **not** scored: presence/quality of `tests/`, `README.md`, and
-`meta/main.yml`. Every role currently ships the unedited `ansible-galaxy
-init` boilerplate for these and that's being handled as its own pass, not
-into this one.
+`meta/main.yml`. Every role scored here ships the unedited `ansible-galaxy
+init` boilerplate for those. That is no longer "a later pass": it is now
+`ROLE-STANDARD.md`, and it applies while a role is reworked. The `k3s`
+role is the first one to satisfy it.
+
+## Status
+
+| Role | State |
+|---|---|
+| `k3s` (was `cluster-setup`) | Reworked, feature-complete for v1.0.0, 10 molecule scenarios. On branch `refractor/cluster-setup`, not yet reviewed or merged. |
+| everything else | As scored below. |
 
 ## How these are scored
 
@@ -38,7 +48,7 @@ See `CONVENTIONS.md` for the rules these questions are checking against.
 | [lvm-setup](#lvm-setup--4) | **4** | Works, but a one-off script wearing a role costume. |
 | [haproxy](#haproxy--4) | **4** | Config logic is fine; the var schema is the problem. |
 | [certbot](#certbot--3) | **3** | Same cert-assembly logic reimplemented three times. |
-| [cluster-setup](#cluster-setup--3) | **3** | Defaults don't match what tasks actually use. |
+| [cluster-setup](#cluster-setup--3) | **3** | Defaults don't match what tasks actually use. **Reworked — now `k3s`.** |
 | [wireguard](#wireguard--2) | **2** | Two unrelated roles wearing a trench coat. |
 
 ## Suggested rework order
@@ -51,8 +61,8 @@ not by how quick the fix is:
 2. **haproxy** - the var schema is the thing you specifically said fights
    you every time you touch it; redesigning it pays off on every future
    service you add.
-3. **cluster-setup** - not just messy, actively wrong (dead defaults);
-   worth fixing before the next cluster rebuild makes you debug it live.
+3. ~~**cluster-setup**~~ - **done.** Rebuilt as `k3s` (2026-08/09); see
+   the Status table above and `roles/k3s/CLAUDE.md`.
 4. **certbot** - three independent implementations of "assemble a PEM
    from a cert lineage" is a bug waiting for the three to drift.
 5. **longhorn** - low risk, mostly "promote hardcoded values to defaults
@@ -64,6 +74,12 @@ not by how quick the fix is:
 ---
 
 ## iscsi-client — 8
+
+**Still the one to imitate among the roles that have not been reworked.**
+It is not the overall reference any more — `k3s` is, because it ships a
+declared contract and a test suite that `iscsi-client` does not have. What
+`iscsi-client` still teaches, and `ROLE-STANDARD.md` does not, is taste:
+modelling the domain correctly on the first try.
 
 **Why it's the high-water mark:** the variable shape (portal -> targets)
 matches the actual domain model, defaults ship a realistic worked example,
@@ -109,7 +125,7 @@ top-level README), but that's a documentation nit, not a scoring one.
 **Why:** `blockinfile` + a restart-and-wait-for-port-53 handler is exactly
 the right amount of mechanism for "render some lines into a file."
 
-**Dings:** entirely inherits [ground rule 8](CONVENTIONS.md#8-one-cross-role-concept-one-definition)'s
+**Dings:** entirely inherits [ground rule 7](CONVENTIONS.md#7-one-cross-role-concept-one-definition)'s
 problem - `dns_services` is one of at least two independently-shaped
 definitions of "a service this homelab exposes." Not this role's fault to
 fix alone, but it's the role most exposed to that duplication going stale.
@@ -156,7 +172,7 @@ much as "one server pool that happens to serve many services." Self-signed
 placeholder-cert generation is embedded in this role and coupled to
 `certbot` only through a shared directory convention
 (`/etc/haproxy/ssl/*.pem`), with no shared source of truth for which
-domains should have certs - see `CONVENTIONS.md` rule 8; this is the other
+domains should have certs - see `CONVENTIONS.md` rule 7; this is the other
 place that duplication actually bites, since a domain added here but
 forgotten in the global `services` list silently keeps its self-signed
 cert forever.
@@ -184,6 +200,15 @@ that architecture, not because it's declared); `README.md`/`meta/main.yml`
 are untouched `ansible-galaxy init` boilerplate.
 
 ## cluster-setup — 3
+
+> **Resolved.** The role was renamed to `k3s` and rebuilt between 2026-08
+> and 2026-09 on branch `refractor/cluster-setup`. Every finding below is
+> addressed: the variables are declared in `meta/argument_specs.yml` and
+> asserted by `tasks/validate-variables.yml`, the `debug` task is gone,
+> node readiness is read through `k3s kubectl get --raw /readyz` instead of
+> `kubectl | grep | wc -l`, and ten molecule scenarios cover the topologies.
+> It is the role `ROLE-STANDARD.md` was written from. The 2026-07 finding is
+> kept below, because it is the reason the rework happened.
 
 **Why this is worse than it looks at a glance:** `defaults/main.yml`
 defines `rancher_bootstrap_password`, `rancher_version`,

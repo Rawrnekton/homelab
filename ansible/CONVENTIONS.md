@@ -7,9 +7,10 @@ already made once. They come out of a review of every role under `roles/`
 in 2026-07 (see `ROADMAP.md`). Each rule below traces back to something that
 role review actually punished.
 
-Not covered here: testing and doc conventions (`tests/`, `README.md` per
-role, `meta/main.yml`). Those are being addressed separately when
-refractoring each role.
+Not covered here: the variable contract, testing, and the per-role docs
+(`meta/argument_specs.yml`, `molecule/`, `README.md`, `meta/main.yml`).
+Those have their own document now: `ROLE-STANDARD.md`. It was written out of
+the `k3s` refactor, which is the first role to satisfy all of it.
 
 ## 1. One role, one responsibility
 
@@ -17,7 +18,7 @@ If a task file starts doing something that isn't in the role's name, that's
 a new role. Naming a role after the tool it happens to install (`wireguard`)
 and then also using it to provision unrelated infrastructure (an ISPConfig
 reverse-proxy vhost via a raw JSON API call) is exactly the failure mode to
-avoid. By the time Iäm back in that file for a WireGuard change, half of
+avoid. By the time I'm back in that file for a WireGuard change, half of
 it is unrelated I have to read past.
 
 Rule of thumb: Can I explain the role in one sentence without an "and
@@ -108,7 +109,7 @@ variable, one shape, defined once (`group_vars`), and every role reads from
 it. It doesn't get reinvented locally because that's more convenient for
 one role's template.
 
-## 9. Match the codebase's language and tooling consistently
+## 8. Match the codebase's language and tooling consistently
 
 Comments, error messages, and script output are English throughout, even in
 one-off shell scripts (`certbot/files/new_cert.sh` is currently German — an
