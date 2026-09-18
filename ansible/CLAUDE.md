@@ -38,6 +38,28 @@ the role that needs it. The trunk only owns the inventory files that no rework
 is touching. This keeps the trunk mergeable into every role branch at any time,
 and keeps a variable rename in the same commit as the tasks that read it.
 
+## Starting a rework
+
+The prompt for a fresh session is one line: "Rework the `<role>` role as listed
+in `ansible/ROADMAP.md` and `ansible/CLAUDE.md`." Everything else the session
+needs is in those two files: the rules here, the per-role scope block and the
+cross-role decisions in `ROADMAP.md`. The standing instructions for every rework
+are:
+
+- Branch off `refractor/2026` into `refractor/<role>`, in its own worktree under
+  `/home/jona/workspace/homelab.worktrees/refractor/<role>`, and push it.
+- Rename the role if ansible-lint needs it (no hyphens). Move `site.yml` and the
+  `group_vars` file with it, on the role branch.
+- Molecule expects no outside infrastructure. Build what the tests need in
+  Docker (a second container for a peer, a target, an API stub).
+- When the scope has a question the code cannot answer, pick the option that
+  adds nothing and list it under "Open points" in the role's `CLAUDE.md`.
+- Run the full molecule suite, ansible-lint and prettier before the commit.
+  Commit on the role branch, push, add the status line to `ROADMAP.md` on the
+  trunk, and update the memory file for the branch strategy.
+- Report at the end: what changed, what the tests found, what is open for the
+  user.
+
 ## 1. Lock the scope before writing tasks
 
 Write the in-scope and out-of-scope lists first, date them, and keep them in the

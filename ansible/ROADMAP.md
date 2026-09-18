@@ -71,6 +71,69 @@ quick the fix is:
    script (rename it to say so) or actually becomes reusable.
 7. **garage / common / dns / iscsi-client** - polish only, not blocking.
 
+## Cross-role decisions
+
+Decisions that more than one role depends on. They were taken in the scope
+interview of 2026-09-18, before any of the affected roles was started, so that
+no single rework invents a shape the others then inherit. A role's own scope
+block (below, under its finding) points here instead of repeating it.
+
+### The `services` shape (decided 2026-09-18)
+
+"A service this homelab exposes" is declared once, in `group_vars/all`, and read
+by `dns`, `haproxy` and the ISPConfig proxy role that comes out of the
+`wireguard` split. `certbot` does not read it; certificates are their own list.
+
+```yaml
+# group_vars/all/services.yml
+services:
+  - name: mealie.cindergla.de # the full FQDN, the key everywhere
+    dns_target: 192.168.2.170 # the A record the dns role writes
+    backend: argo-cluster # a haproxy pool by name; absent = DNS record only
+    external: true # a vhost on the VPS; default false
+
+certificates:
+  - name: wildcard-cindergla-de # the lineage and PEM file name
+    domains: ["*.cindergla.de"]
+  - name: rancher-k8s-internal
+    domains: ["rancher.k8s.internal.cindergla.de"]
+```
+
+- **`name` is the full FQDN.** No base-domain variable and no label-plus-suffix
+  assembly; `dns_domain_suffix` and `haproxy_base_domain` go away. Repeating the
+  domain in every entry is the accepted price for a second domain or a
+  multi-level name working without a special case. An earlier attempt to be
+  clever about this failed and never reached git.
+- **`backend` names a pool that `haproxy` declares.** Pools are a `haproxy`
+  concept (servers, port, TLS, health check), services only point at one. There
+  is **no default pool**: every routed service names its pool, so the file says
+  where traffic goes without knowing a fallback rule. A service without
+  `backend` is a DNS record and nothing else (`mqtt.cindergla.de` today, added
+  by hand on the Pi-hole). The reason for named pools is that the gateway is a
+  single point of failure and a detached monitoring host is the next project;
+  its services must not route through the cluster pool.
+- **`external` is one boolean, default `false`.** `true` means exactly: the VPS
+  gets a vhost for the name and proxies it through the tunnel to the gateway.
+  There is no third state.
+- **Certificates are a list of their own, not derived from `services`.** One
+  entry is one certbot lineage and one PEM under `/etc/haproxy/ssl/`. An entry
+  may hold a wildcard, one name, or several names. The recommended layout is one
+  wildcard entry plus one entry per name the wildcard does not match
+  (`rancher.k8s.internal.cindergla.de`). Merging everything into one multi-SAN
+  certificate is possible with the same shape but not recommended: every added
+  name re-issues the whole certificate. HAProxy picks the certificate by SNI
+  from the directory, so no service-to-certificate mapping exists anywhere.
+  `haproxy` (or `certbot`) asserts that every service with a `backend` is
+  matched by some `certificates[].domains` entry, a wildcard matching exactly
+  one label; a name nobody issues a certificate for fails the run instead of
+  keeping a self-signed placeholder forever.
+- **TCP passthrough stays a `haproxy`-only concept** (`haproxy_tcp_services`,
+  with independent listen and backend ports as today). Those are ports, not
+  names, and nothing else needs them.
+- **The VPS proxies all external services through one vhost** with the other
+  names as aliases, not one vhost per service. Separate vhosts were only the
+  first thing that worked.
+
 ---
 
 ## iscsi-client — 8
