@@ -1,0 +1,58 @@
+---
+# Every service this homelab exposes, declared once. dns, haproxy and
+# ispconfig_proxy read this list; the shape is decided in ROADMAP.md,
+# "Cross-role decisions". `name` is the full FQDN, `backend` names a haproxy
+# pool, `mode` is https unless a service says tcp, `external` puts the name on
+# the reverse-proxy vhost of the VPS.
+services:
+  - name: mealie.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+    external: true
+  - name: rancher.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+  - name: homepage.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+  - name: argocd.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+    external: true
+  - name: auth.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+    external: true
+  - name: todo.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+    external: true
+  - name: memories.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+    external: true
+  - name: copperforge.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+    external: true
+  - name: vorleser.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+    external: true
+  - name: fliederhof.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+  - name: whoami.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+  - name: zigbee2mqtt.cindergla.de
+    dns_target: 192.168.2.170
+    backend: argo-cluster
+  - name: garage.cindergla.de
+    dns_target: 192.168.2.170
+    backend: garage
+  - name: mqtt.cindergla.de
+    dns_target: 192.168.2.170
+    mode: tcp
+    listen_port: 1883
+    backend: argo-mqtt

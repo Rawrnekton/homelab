@@ -1,3 +1,13 @@
 ---
-# defaults file for wireguard
-wireguard_road_warriors: []
+# Every default here agrees with meta/argument_specs.yml, which also holds the
+# descriptions. wireguard_address has no default: every host declares its own
+# tunnel address in host_vars, so the role fails until it does.
+wireguard_state: present
+wireguard_ip_forward: false
+
+# Peers that run this role in the same play; their public key comes from
+# their facts. See meta/argument_specs.yml for the keys.
+wireguard_peer_hosts: []
+
+# Static peers with a public key written down in the inventory.
+wireguard_peers: []

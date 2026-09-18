@@ -1,0 +1,61 @@
+---
+- name: Verify the interface is gone and the package stayed
+  hosts: wireguard
+  become: true
+  tasks:
+    - name: The interface is gone
+      ansible.builtin.assert:
+        that:
+          - "'wg0' not in ansible_facts.interfaces"
+
+    # An instance of a template unit: service_facts does not know it, systemctl
+    # does. After the removal it is neither active nor enabled.
+    # command, not the systemd module: that module refuses to run without a
+    # state or enabled to enforce, and enforcing would hide what the role did.
+    - name: Ask systemd about the unit
+      ansible.builtin.command: # noqa: command-instead-of-module
+        cmd: systemctl {{ item }} wg-quick@wg0.service
+      register: unit_state
+      changed_when: false
+      failed_when: false
+      loop:
+        - is-enabled
+        - is-active
+
+    - name: The unit is not enabled and not active
+      ansible.builtin.assert:
+        that:
+          - unit_state.results[0].stdout != 'enabled'
+          - unit_state.results[1].stdout != 'active'
+        fail_msg:
+          "wg-quick@wg0 on {{ inventory_hostname }}: {{ unit_state.results |
+          map(attribute='stdout') | list }}"
+
+    - name: Check every path the role owns
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: leftovers
+      loop:
+        - /etc/wireguard/wg0.conf
+        - /etc/wireguard/private.key
+        - /etc/sysctl.d/99-wireguard.conf
+
+    - name: Nothing was left behind
+      vars:
+        remaining:
+          "{{ leftovers.results | selectattr('stat.exists') |
+          map(attribute='item') | list }}"
+      ansible.builtin.assert:
+        that:
+          - remaining | length == 0
+        fail_msg:
+          "wireguard_state is absent, but these paths still exist: {{ remaining
+          }}"
+
+    - name: Read the installed packages
+      ansible.builtin.package_facts:
+
+    - name: The package was left alone
+      ansible.builtin.assert:
+        that:
+          - "'wireguard-tools' in ansible_facts.packages"

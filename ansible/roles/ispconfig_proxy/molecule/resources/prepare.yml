@@ -1,0 +1,49 @@
+---
+# One container plays the VPS: the role runs on it and the ISPConfig API it
+# talks to runs on it, as in the homelab, where the panel is on the VPS. The
+# API is the stub in files/ispconfig_stub.py, run as a systemd service.
+- name: Prepare the VPS with a stand-in for ISPConfig
+  hosts: all
+  become: true
+  tasks:
+    - name: Install the stub
+      ansible.builtin.copy:
+        src: files/ispconfig_stub.py
+        dest: /usr/local/bin/ispconfig-stub
+        mode: "0755"
+
+    - name: Create the state directory
+      ansible.builtin.file:
+        path: /var/lib/ispconfig-stub
+        state: directory
+        mode: "0755"
+
+    - name: Install the unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ispconfig-stub.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Stand-in for the ISPConfig JSON API (molecule)
+
+          [Service]
+          ExecStart=/usr/local/bin/ispconfig-stub --port 8080 \
+            --state /var/lib/ispconfig-stub/state.json \
+            --username {{ molecule_stub_username }} \
+            --password {{ molecule_stub_password }}
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start the stub
+      ansible.builtin.systemd:
+        name: ispconfig-stub.service
+        state: started
+        daemon_reload: true
+
+    - name: Wait for it to answer
+      ansible.builtin.wait_for:
+        port: 8080
+        host: 127.0.0.1
+        timeout: 30

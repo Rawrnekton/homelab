@@ -1,6 +1,9 @@
 ---
-# handlers file for wireguard
-- name: Reload wireguard configuration
-  ansible.builtin.shell: "wg syncconf wg0 <(wg-quick strip wg0)"
-  args:
-    executable: /bin/bash
+# A restart, not `wg syncconf`: syncconf applies keys, port and peers without
+# dropping the interface, but ignores a changed Address. A restart applies
+# every line of the config, at the price of a short drop of the tunnel; the
+# peers behind it re-handshake on their next packet or keepalive.
+- name: Restart wireguard
+  ansible.builtin.systemd:
+    name: "{{ wireguard_service }}"
+    state: restarted

@@ -1,0 +1,26 @@
+---
+# Re-run with a moved upstream, argocd gone external and todo new. Play vars
+# sit above the group_vars of the scenario, so this list wins here only.
+- name: Re-run the role with a changed upstream and alias list
+  hosts: all
+  become: true
+  vars:
+    ispconfig_proxy_upstream: https://10.0.0.4/
+    services:
+      - name: mealie.example.test
+        dns_target: 192.0.2.10
+        backend: cluster
+        external: true
+      - name: argocd.example.test
+        dns_target: 192.0.2.10
+        backend: cluster
+      - name: auth.example.test
+        dns_target: 192.0.2.10
+        backend: cluster
+        external: true
+      - name: todo.example.test
+        dns_target: 192.0.2.10
+        backend: cluster
+        external: true
+  roles:
+    - role: ispconfig_proxy

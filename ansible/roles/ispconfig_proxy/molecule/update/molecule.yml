@@ -1,0 +1,67 @@
+---
+# Update scenario: the upstream moves and the alias list changes on a re-run.
+#
+# Goal: an existing site is updated in place, never replaced. converge builds
+# a site with two aliases. side_effect re-runs the role with another upstream,
+# one alias dropped and one added. verify reads the stub: the same domain_id,
+# the new directives, the new alias list, and one add call in total.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - name: ispconfig-vps
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      all:
+        molecule_stub_username: remote
+        molecule_stub_password: remote-secret
+        ispconfig_proxy_api_url: http://127.0.0.1:8080/remote/json.php
+        ispconfig_proxy_username: remote
+        ispconfig_proxy_password: remote-secret
+        ispconfig_proxy_upstream: https://10.0.0.2/
+        services:
+          - name: mealie.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+          - name: argocd.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+          - name: auth.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy

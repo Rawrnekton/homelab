@@ -1,0 +1,7 @@
+---
+# Every default here agrees with meta/argument_specs.yml, which also holds the
+# descriptions. The API URL, the credentials, the upstream and `services`
+# have no default: they are declared in group_vars, and the role fails until
+# they are.
+ispconfig_proxy_server_id: 1
+ispconfig_proxy_client_id: 0

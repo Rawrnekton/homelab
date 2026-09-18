@@ -1,0 +1,11 @@
+---
+# Read the stub's state: the web_domain rows and the call counters. Used by
+# every verify as `stub`.
+- name: Read the state of the stub
+  ansible.builtin.slurp:
+    src: /var/lib/ispconfig-stub/state.json
+  register: stub_state_raw
+
+- name: Decode it
+  ansible.builtin.set_fact:
+    stub: "{{ stub_state_raw.content | b64decode | from_json }}"

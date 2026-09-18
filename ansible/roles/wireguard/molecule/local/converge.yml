@@ -1,0 +1,332 @@
+---
+# Converge: the input contract, checked on the controller.
+#
+# This scenario has no verify playbook on purpose. A rejected input must make
+# the play that submits it fail, so the assertions live here, in the converge.
+#
+# Two helper task files hold the plumbing:
+#   tasks/expect-rejected.yml - the input must fail, with case_expect in the message
+#   tasks/expect-accepted.yml - the input must pass
+# Both run tasks/validate.yml: the argument spec, then validate-variables.yml.
+#
+# Every case records its outcome in molecule_case_results, and the report play
+# at the end fails once with the whole table. One broken rule must not hide
+# the rules behind it.
+- name: Verify the role rejects bad input
+  hosts: localhost
+  gather_facts: false
+  vars:
+    good_key: cLL6u3P+LYDKHnuPfCLFrJSsuc2rf3dQW/XcQ/VJsRw=
+    other_key: 9X5hV5+Z5b6r0qPZKX8x6Zm4M9fT2h3s1kJ0LwQeR2Y=
+  tasks:
+    # -- Shape: the argument spec ----------------------------------------
+    - name: Reject a host without an address
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: wireguard_address is missing
+        case_expect: "missing required arguments: wireguard_address"
+
+    - name: Reject a state the role does not know
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: wireguard_state is "gone"
+        case_expect: wireguard_state
+        wireguard_address: 10.0.0.1/24
+        wireguard_state: gone
+
+    - name: Reject a listen port that is a word
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: wireguard_listen_port is a word
+        case_expect: wireguard_listen_port
+        wireguard_address: 10.0.0.1/24
+        wireguard_listen_port: wireguard
+
+    - name: Reject a peer host list that is a string
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: wireguard_peer_hosts is a string
+        case_expect: wireguard_peer_hosts
+        wireguard_address: 10.0.0.1/24
+        wireguard_peer_hosts: wg-peer
+
+    - name: Reject a managed peer without allowed IPs
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: managed peer has no allowed_ips
+        case_expect: "missing required arguments: allowed_ips"
+        wireguard_address: 10.0.0.1/24
+        wireguard_peer_hosts:
+          - host: wg-peer
+
+    - name: Reject a static peer without a public key
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: static peer has no public_key
+        case_expect: "missing required arguments: public_key"
+        wireguard_address: 10.0.0.1/24
+        wireguard_peers:
+          - name: laptop
+            allowed_ips: [10.0.0.3/32]
+
+    - name: Reject a key the role does not know
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: static peer carries an unknown key (preshared_key)
+        case_expect: Supported parameters include
+        wireguard_address: 10.0.0.1/24
+        wireguard_peers:
+          - name: laptop
+            public_key: "{{ good_key }}"
+            allowed_ips: [10.0.0.3/32]
+            preshared_key: "{{ good_key }}"
+
+    - name: Reject a forwarding switch that is not a boolean
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: wireguard_ip_forward is a word
+        case_expect: wireguard_ip_forward
+        wireguard_address: 10.0.0.1/24
+        wireguard_ip_forward: maybe
+
+    # -- Cross-field rules: validate-variables.yml ------------------------
+    - name: Reject an address without a prefix length
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: wireguard_address has no prefix length
+        case_expect: prefix length
+        wireguard_address: 10.0.0.1
+
+    - name: Reject an address that is not an IP address
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: wireguard_address is not an IP address
+        case_expect: prefix length
+        wireguard_address: 300.0.0.1/24
+
+    - name: Reject a listen port outside the UDP range
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: wireguard_listen_port is 70000
+        case_expect: between 1 and 65535
+        wireguard_address: 10.0.0.1/24
+        wireguard_listen_port: 70000
+
+    - name: Reject a managed peer that is this host
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: managed peer is the host itself
+        case_expect: another host of the inventory
+        wireguard_address: 10.0.0.1/24
+        wireguard_peer_hosts:
+          - host: localhost
+            allowed_ips: [10.0.0.2/32]
+
+    - name: Reject a managed peer that is not in the inventory
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: managed peer is not in the inventory
+        case_expect: another host of the inventory
+        wireguard_address: 10.0.0.1/24
+        wireguard_peer_hosts:
+          - host: wg-stranger
+            allowed_ips: [10.0.0.2/32]
+
+    - name: Reject the same managed peer twice
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: managed peer listed twice
+        case_expect: A host appears once
+        wireguard_address: 10.0.0.1/24
+        wireguard_peer_hosts:
+          - host: wg-peer
+            allowed_ips: [10.0.0.2/32]
+          - host: wg-peer
+            allowed_ips: [10.0.0.4/32]
+
+    - name: Reject two static peers with one name
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: two static peers share a name
+        case_expect: A host appears once
+        wireguard_address: 10.0.0.1/24
+        wireguard_peers:
+          - name: laptop
+            public_key: "{{ good_key }}"
+            allowed_ips: [10.0.0.3/32]
+          - name: laptop
+            public_key: "{{ other_key }}"
+            allowed_ips: [10.0.0.4/32]
+
+    - name: Reject two static peers with one public key
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: two static peers share a public key
+        case_expect: A host appears once
+        wireguard_address: 10.0.0.1/24
+        wireguard_peers:
+          - name: laptop
+            public_key: "{{ good_key }}"
+            allowed_ips: [10.0.0.3/32]
+          - name: phone
+            public_key: "{{ good_key }}"
+            allowed_ips: [10.0.0.4/32]
+
+    - name: Reject a public key that is not base64 of 32 bytes
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: static peer public key is a word
+        case_expect: 44 characters of base64
+        wireguard_address: 10.0.0.1/24
+        wireguard_peers:
+          - name: laptop
+            public_key: not-a-key
+            allowed_ips: [10.0.0.3/32]
+
+    - name: Reject an allowed IP without a prefix length
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: allowed IP has no prefix length
+        case_expect: Malformed
+        wireguard_address: 10.0.0.1/24
+        wireguard_peers:
+          - name: laptop
+            public_key: "{{ good_key }}"
+            allowed_ips: [10.0.0.3]
+
+    - name: Reject an allowed IP that is not an address
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: allowed IP is a word
+        case_expect: Malformed
+        wireguard_address: 10.0.0.1/24
+        wireguard_peers:
+          - name: laptop
+            public_key: "{{ good_key }}"
+            allowed_ips: [laptop/32]
+
+    - name: Reject one allowed IP on two peers
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: two peers claim the same allowed IP
+        case_expect: no two peers may carry the same one
+        wireguard_address: 10.0.0.1/24
+        wireguard_peer_hosts:
+          - host: wg-peer
+            allowed_ips: [10.0.0.3/32]
+        wireguard_peers:
+          - name: laptop
+            public_key: "{{ good_key }}"
+            allowed_ips: [10.0.0.3/32]
+
+    - name: Reject an endpoint without a port
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: endpoint has no port
+        case_expect: host:port
+        wireguard_address: 10.0.0.2/24
+        wireguard_peer_hosts:
+          - host: wg-peer
+            allowed_ips: [10.0.0.0/24]
+            endpoint: vps.example.test
+
+    - name: Reject a keepalive of zero
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: persistent_keepalive is 0
+        case_expect: between 1 and 65535
+        wireguard_address: 10.0.0.2/24
+        wireguard_peer_hosts:
+          - host: wg-peer
+            allowed_ips: [10.0.0.0/24]
+            endpoint: vps.example.test:51820
+            persistent_keepalive: 0
+
+- name: Verify the role accepts good input
+  hosts: localhost
+  gather_facts: false
+  vars:
+    good_key: cLL6u3P+LYDKHnuPfCLFrJSsuc2rf3dQW/XcQ/VJsRw=
+  tasks:
+    - name: Accept a host with nothing but an address
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: only wireguard_address set
+        wireguard_address: 10.0.0.1/24
+
+    - name: Accept the listening end with a managed peer and a static peer
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: the VPS shape
+        wireguard_address: 10.0.0.1/24
+        wireguard_listen_port: 51820
+        wireguard_ip_forward: true
+        wireguard_peer_hosts:
+          - host: wg-peer
+            allowed_ips: [10.0.0.2/32]
+        wireguard_peers:
+          - name: laptop
+            public_key: "{{ good_key }}"
+            allowed_ips: [10.0.0.3/32]
+
+    - name: Accept the connecting end with endpoint and keepalive
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: the gateway shape
+        wireguard_address: 10.0.0.2/24
+        wireguard_peer_hosts:
+          - host: wg-peer
+            allowed_ips: [10.0.0.0/24]
+            endpoint: 203.0.113.10:51820
+            persistent_keepalive: 25
+
+    - name: Accept an IPv6 tunnel and a bracketed endpoint
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: IPv6 address, IPv6 endpoint
+        wireguard_address: fd00:99::2/64
+        wireguard_peers:
+          - name: hub
+            public_key: "{{ good_key }}"
+            allowed_ips: [fd00:99::/64]
+            endpoint: "[2001:db8::1]:51820"
+            persistent_keepalive: 25
+
+    - name: Accept the absent state with the same variables
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: wireguard_state absent
+        wireguard_state: absent
+        wireguard_address: 10.0.0.2/24
+        wireguard_peer_hosts:
+          - host: wg-peer
+            allowed_ips: [10.0.0.0/24]
+            endpoint: 203.0.113.10:51820
+
+- name: Report the results
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Show the outcome of every case
+      ansible.builtin.debug:
+        msg:
+          "{{ '%-4s  %s' | format('PASS' if item.ok | bool else 'FAIL',
+          item.name) }}"
+      loop: "{{ molecule_case_results }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert every case behaved as the contract says
+      vars:
+        failed_cases:
+          "{{ molecule_case_results | selectattr('ok', 'falsy') | list }}"
+      ansible.builtin.assert:
+        that:
+          - failed_cases | length == 0
+        fail_msg: >-
+          {{ failed_cases | length }} of {{ molecule_case_results | length }}
+          cases failed: {% for case in failed_cases %} - {{ case.name }}: {{
+          case.detail | trim }} {% endfor %}
+        success_msg: >-
+          All {{ molecule_case_results | length }} cases behaved as the contract
+          says.

@@ -20,6 +20,12 @@
   roles:
     - { role: wireguard, tags: [wireguard] }
 
+- name: Publish the external services through the VPS
+  hosts: vps
+  become: true
+  roles:
+    - { role: ispconfig_proxy, tags: [ispconfig_proxy] }
+
 - name: Setup DNS records for services
   hosts: dns
   become: true

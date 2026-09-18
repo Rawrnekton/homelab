@@ -1,0 +1,115 @@
+---
+# Cross-field rules that meta/argument_specs.yml cannot express. Types,
+# required keys, choices and unknown keys are already rejected by the argument
+# spec before this file runs.
+#
+# Every peer, managed or static, is checked by the same rules; the two lists
+# differ only in where the public key comes from.
+- name: Collect every peer of both kinds
+  ansible.builtin.set_fact:
+    wireguard_all_peers: "{{ wireguard_peer_hosts + wireguard_peers }}"
+
+- name: Validate the address is an IP address with a prefix length
+  ansible.builtin.assert:
+    that:
+      - "'/' in wireguard_address"
+      - wireguard_address | ansible.utils.ipaddr('host/prefix') is truthy
+    fail_msg: >-
+      wireguard_address must be the tunnel address of this host with its prefix
+      length, like 10.0.0.2/24. Got: {{ wireguard_address }}
+
+- name: Validate the listen port is a UDP port
+  ansible.builtin.assert:
+    that:
+      - wireguard_listen_port | int in range(1, 65536)
+    fail_msg: >-
+      wireguard_listen_port must be between 1 and 65535. Got: {{
+      wireguard_listen_port }}
+  when: wireguard_listen_port is defined
+
+- name: Validate a managed peer is another host of the inventory
+  vars:
+    unknown_hosts: >-
+      {{ wireguard_peer_hosts | map(attribute='host') | reject('in', hostvars |
+      list) | list }}
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname not in wireguard_peer_hosts | map(attribute='host')
+      - unknown_hosts | length == 0
+    fail_msg: >-
+      Every entry of wireguard_peer_hosts names another host of the inventory.
+      This host: {{ inventory_hostname }}. Not in the inventory: {{
+      unknown_hosts }}
+
+- name: Validate the peers are unique
+  vars:
+    host_names: "{{ wireguard_peer_hosts | map(attribute='host') | list }}"
+    peer_names: "{{ wireguard_peers | map(attribute='name') | list }}"
+    public_keys: "{{ wireguard_peers | map(attribute='public_key') | list }}"
+  ansible.builtin.assert:
+    that:
+      - host_names | unique | length == host_names | length
+      - peer_names | unique | length == peer_names | length
+      - public_keys | unique | length == public_keys | length
+    fail_msg: >-
+      A host appears once in wireguard_peer_hosts, and a name and a public key
+      once in wireguard_peers. Hosts: {{ host_names }}. Names: {{ peer_names }}.
+
+- name: Validate the public keys of the static peers
+  vars:
+    bad_keys: >-
+      {{ wireguard_peers | rejectattr('public_key', 'match',
+      '^[A-Za-z0-9+/]{43}=$') | map(attribute='name') | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_keys | length == 0
+    fail_msg: >-
+      The public key of a static peer is 44 characters of base64, as `wg pubkey`
+      prints it. Peers with another shape: {{ bad_keys }}
+
+- name: Validate the allowed IPs are networks in CIDR notation
+  vars:
+    all_allowed_ips: >-
+      {{ wireguard_all_peers | map(attribute='allowed_ips') | flatten | list }}
+    bad_allowed_ips: >-
+      {%- set bad = [] -%} {%- for ip in all_allowed_ips -%}
+        {%- if '/' not in ip or not (ip | ansible.utils.ipaddr) -%}
+          {%- set _ = bad.append(ip) -%}
+        {%- endif -%}
+      {%- endfor -%} {{ bad }}
+  ansible.builtin.assert:
+    that:
+      - bad_allowed_ips | length == 0
+      - all_allowed_ips | unique | length == all_allowed_ips | length
+    fail_msg: >-
+      Every allowed IP is an address or network with a prefix length
+      (10.0.0.3/32, 10.0.0.0/24), and no two peers may carry the same one:
+      WireGuard routes it to the last peer that claims it and says nothing.
+      Malformed: {{ bad_allowed_ips }}. All: {{ all_allowed_ips }}
+
+- name: Validate the endpoints carry a port
+  vars:
+    bad_endpoints: >-
+      {{ wireguard_all_peers | selectattr('endpoint', 'defined') |
+      rejectattr('endpoint', 'match', '^[^:
+      ]+:[0-9]+$|^\[[0-9a-fA-F:]+\]:[0-9]+$') | map(attribute='endpoint') | list
+      }}
+  ansible.builtin.assert:
+    that:
+      - bad_endpoints | length == 0
+    fail_msg: >-
+      An endpoint is host:port, with the host as a name, an IPv4 address or an
+      IPv6 address in brackets. Got: {{ bad_endpoints }}
+
+- name: Validate the keepalive intervals
+  vars:
+    bad_keepalives: >-
+      {{ wireguard_all_peers | selectattr('persistent_keepalive', 'defined') |
+      rejectattr('persistent_keepalive', 'in', range(1, 65536)) | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_keepalives | length == 0
+    fail_msg: >-
+      persistent_keepalive is a number of seconds between 1 and 65535. Peers
+      with another value: {{ bad_keepalives | map(attribute='endpoint',
+      default='(no endpoint)') | list }}

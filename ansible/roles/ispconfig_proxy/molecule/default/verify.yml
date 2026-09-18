@@ -1,0 +1,69 @@
+---
+# Fail fast. The state of the stub is the effect: the rows are what ISPConfig
+# would have in web_domain, the counters say how often each method ran.
+- name: Verify the vhost and its aliases
+  hosts: all
+  become: true
+  vars:
+    external_names:
+      "{{ services | selectattr('external', 'defined') | selectattr('external')
+      | map(attribute='name') | list }}"
+  tasks:
+    - name: Read the state of the stub
+      ansible.builtin.import_tasks: ../resources/tasks/read-state.yml
+
+    - name: Exactly one site exists, named after the first external service
+      vars:
+        sites:
+          "{{ stub.records | selectattr('type', 'equalto', 'vhost') | list }}"
+      ansible.builtin.assert:
+        that:
+          - sites | length == 1
+          - sites[0].domain == external_names[0]
+          - sites[0].ssl == 'y'
+          - sites[0].ssl_letsencrypt == 'y'
+          - sites[0].rewrite_to_https == 'y'
+          - sites[0].proxy_protocol == 'n'
+          - sites[0].active == 'y'
+          - "'ProxyPass          /  ' ~ ispconfig_proxy_upstream ~
+            '  upgrade=websocket keepalive=On' in sites[0].apache_directives"
+          - "'ProxyPassReverse   /  ' ~ ispconfig_proxy_upstream in
+            sites[0].apache_directives"
+          - "'ProxyPass          /.well-known/acme-challenge !' in
+            sites[0].apache_directives"
+        fail_msg: "Sites in the stub: {{ sites }}"
+
+    - name:
+        Every other external name is an active alias of that site, and nothing
+        else exists
+      vars:
+        site_id:
+          "{{ (stub.records | selectattr('type', 'equalto', 'vhost') |
+          first).domain_id }}"
+        aliases:
+          "{{ stub.records | selectattr('type', 'equalto', 'alias') | list }}"
+      ansible.builtin.assert:
+        that:
+          - aliases | map(attribute='domain') | sort == external_names[1:] |
+            sort
+          - aliases | map(attribute='parent_domain_id') | map('string') | unique
+            == [site_id | string]
+          - aliases | map(attribute='active') | unique == ['y']
+          - aliases | map(attribute='ssl_letsencrypt_exclude') | unique == ['n']
+          - stub.records | length == external_names | length
+        fail_msg: "Rows in the stub: {{ stub.records }}"
+
+    # converge and idempotence both ran: the site and the aliases were
+    # created once, nothing was updated or deleted, and both sessions were
+    # closed.
+    - name: The re-run created nothing and updated nothing
+      ansible.builtin.assert:
+        that:
+          - stub.calls.sites_web_domain_add == 1
+          - stub.calls.sites_web_aliasdomain_add == external_names | length - 1
+          - stub.calls.sites_web_domain_update | default(0) == 0
+          - stub.calls.sites_web_aliasdomain_delete | default(0) == 0
+          - stub.calls.login == 2
+          - stub.calls.logout == 2
+          - stub.sessions | length == 0
+        fail_msg: "Calls: {{ stub.calls }}, open sessions: {{ stub.sessions }}"

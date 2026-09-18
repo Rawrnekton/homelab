@@ -1,0 +1,16 @@
+---
+- name: Validate variables
+  ansible.builtin.import_tasks: validate-variables.yml
+
+- name: Collect the names the vhost carries
+  ansible.builtin.set_fact:
+    ispconfig_proxy_external_names: >-
+      {{ services | selectattr('external', 'defined') | selectattr('external') |
+      map(attribute='name') | list }}
+
+# Nothing to do without an external service: no vhost is created for nothing,
+# and no vhost is deleted when the last service left (out of scope), so the
+# API is not even contacted.
+- name: Manage the vhost in ISPConfig
+  ansible.builtin.import_tasks: vhost.yml
+  when: ispconfig_proxy_external_names | length > 0

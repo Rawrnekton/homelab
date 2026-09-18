@@ -1,0 +1,132 @@
+---
+# Role argument specification — the schema/contract for this role's variables.
+#
+# Validated automatically before any task in `main` runs (fail fast on bad
+# input), and rendered as documentation by `ansible-doc -t role ... wireguard`.
+#
+# Prose descriptions live HERE (single source of truth); defaults/main.yml
+# holds the actual values with only terse orienting comments.
+argument_specs:
+  main:
+    short_description: Manage one WireGuard interface (wg0) on this host.
+    description:
+      - Installs wireguard-tools, generates the private key of the host on the
+        first run and keeps it, renders C(/etc/wireguard/wg0.conf) and runs the
+        interface through C(wg-quick@wg0).
+      - Nothing in the role knows which host is "the server". Every host
+        declares its own address, listens when it sets a port, and lists its
+        peers. A peer is either another host of the play, whose public key the
+        role reads from its facts, or a static peer with a public key written
+        down in the inventory.
+    author:
+      - Jonathan Gerdes
+    options:
+      wireguard_state:
+        type: str
+        required: false
+        default: present
+        choices:
+          - present
+          - absent
+        description:
+          - C(present) installs the tools, writes the keys and the config and
+            starts the interface.
+          - C(absent) stops the interface and removes the config, the private
+            key and the sysctl drop-in. The package stays installed.
+      wireguard_address:
+        type: str
+        required: true
+        description:
+          - The tunnel address of this host with its prefix length, for example
+            C(10.0.0.2/24). The prefix is what makes the other tunnel addresses
+            routable through the interface, so it is mandatory.
+      wireguard_listen_port:
+        type: int
+        required: false
+        description:
+          - UDP port this host listens on. Set it on a host that other peers
+            connect to; leave it out on a host that only connects out.
+      wireguard_ip_forward:
+        type: bool
+        required: false
+        default: false
+        description:
+          - Whether this host forwards IPv4 packets between its peers. Set it on
+            the host that relays traffic between the other tunnel ends.
+          - C(true) writes C(net.ipv4.ip_forward = 1) to
+            C(/etc/sysctl.d/99-wireguard.conf) and applies it. C(false) removes
+            that drop-in and leaves the live value alone, because other things
+            on the host (a container runtime, for one) may need forwarding too.
+      wireguard_peer_hosts:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description:
+          - Peers that are hosts of this inventory and run this role in the same
+            play. Their public key is read from their facts, so both ends of a
+            tunnel are configured in one run and no key is ever written down.
+        options:
+          host:
+            type: str
+            required: true
+            description:
+              - The inventory name of the peer. It must be in the same play with
+                C(wireguard_state) C(present); the role fails otherwise.
+          allowed_ips:
+            type: list
+            elements: str
+            required: true
+            description:
+              - The addresses and networks routed to this peer, in CIDR
+                notation. On a host that relays, the peer's own tunnel address
+                as a C(/32). On a host that connects to the relay, the whole
+                tunnel network.
+          endpoint:
+            type: str
+            required: false
+            description:
+              - Where to reach the peer, as C(host:port). Set it on the side
+                that connects out; leave it out on the side that listens.
+          persistent_keepalive:
+            type: int
+            required: false
+            description:
+              - Seconds between keepalive packets to this peer. Set it on the
+                side behind NAT so that the tunnel stays open; C(25) is the
+                usual value.
+      wireguard_peers:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description:
+          - Static peers whose public key is written down in the inventory. The
+            road warriors, whose other end this role never sees.
+        options:
+          name:
+            type: str
+            required: true
+            description: Label for the peer, written as a comment in the config.
+          public_key:
+            type: str
+            required: true
+            description:
+              The peer's public key, base64 as C(wg pubkey) prints it.
+          allowed_ips:
+            type: list
+            elements: str
+            required: true
+            description:
+              - The addresses and networks routed to this peer, in CIDR
+                notation. Usually the peer's tunnel address as a C(/32).
+          endpoint:
+            type: str
+            required: false
+            description:
+              - Where to reach the peer, as C(host:port). Leave it out for a
+                peer that connects in from a changing address.
+          persistent_keepalive:
+            type: int
+            required: false
+            description: Seconds between keepalive packets to this peer.

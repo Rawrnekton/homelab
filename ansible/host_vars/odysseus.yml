@@ -1,0 +1,13 @@
+---
+# The gateway: connects out to the VPS and reaches every tunnel address
+# through it, road warriors included.
+wireguard_address: 10.0.0.2/24
+
+wireguard_peer_hosts:
+  - host: naglfar
+    allowed_ips:
+      - 10.0.0.0/24
+    # The public address of the VPS, read from its facts; both hosts are in
+    # the same play.
+    endpoint: "{{ hostvars['naglfar'].ansible_default_ipv4.address }}:51820"
+    persistent_keepalive: 25

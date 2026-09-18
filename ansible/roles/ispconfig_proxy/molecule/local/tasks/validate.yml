@@ -1,0 +1,19 @@
+---
+# The two halves of the input contract, in the order the role runs them:
+# the argument spec first (types, required keys, unknown keys), then the
+# cross-field rules in tasks/validate-variables.yml.
+#
+# The spec is read from meta/argument_specs.yml and validated explicitly,
+# because Ansible only validates the `main` entry point on its own, and
+# running `main` here would talk to an API that does not exist.
+- name: Validate against the argument spec
+  ansible.builtin.validate_argument_spec:
+    argument_spec:
+      "{{ (lookup('ansible.builtin.file', playbook_dir ~
+      '/../../meta/argument_specs.yml') | from_yaml).argument_specs.main.options
+      }}"
+
+- name: Validate the cross-field rules
+  ansible.builtin.include_role:
+    name: ispconfig_proxy
+    tasks_from: validate-variables.yml

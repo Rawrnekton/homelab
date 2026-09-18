@@ -1,0 +1,18 @@
+---
+# The removal must be idempotent as well, so the role runs twice. The second
+# run has nothing left to remove and must still succeed.
+- name: Remove the interface
+  hosts: wireguard
+  become: true
+  vars:
+    wireguard_state: absent
+  roles:
+    - role: wireguard
+
+- name: Remove the interface again
+  hosts: wireguard
+  become: true
+  vars:
+    wireguard_state: absent
+  roles:
+    - role: wireguard

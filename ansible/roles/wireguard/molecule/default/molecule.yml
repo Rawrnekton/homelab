@@ -1,0 +1,69 @@
+---
+# Default scenario: the two ends of a tunnel.
+#
+# Goal: the homelab shape. `wg-server` listens and relays (the VPS), `wg-client`
+# connects out with an endpoint and a keepalive (the gateway). Each is the
+# other's managed peer, so both public keys come out of the facts. verify
+# proves that packets cross the tunnel in both directions.
+#
+# Two privileged systemd containers on a scenario network. The kernel module
+# is the host's; prepare.yml checks that it is there.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &container
+    name: wg-server
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: wireguard-molecule-default
+    network_mode: wireguard-molecule-default
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - wireguard
+      - server
+  - <<: *container
+    name: wg-client
+    groups:
+      - wireguard
+      - client
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      server:
+        wireguard_address: 10.99.0.1/24
+        wireguard_listen_port: 51820
+        wireguard_ip_forward: true
+        wireguard_peer_hosts:
+          - host: wg-client
+            allowed_ips:
+              - 10.99.0.2/32
+      client:
+        wireguard_address: 10.99.0.2/24
+        wireguard_peer_hosts:
+          - host: wg-server
+            allowed_ips:
+              - 10.99.0.0/24
+            # The address of the server is only known once it runs; the same
+            # expression the homelab uses for the VPS.
+            endpoint:
+              "{{ hostvars['wg-server'].ansible_default_ipv4.address }}:51820"
+            persistent_keepalive: 25
+verifier:
+  name: ansible

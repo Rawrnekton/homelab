@@ -1,0 +1,77 @@
+---
+# Three steps: set the laptop up by hand, remember how the tunnel ends look,
+# then re-run the role with the laptop as a static peer of the server.
+# The laptop's play needs the address of the server out of its facts, and a
+# play only gathers facts on its own hosts: hence the first play.
+- name: Gather facts on the tunnel ends
+  hosts: wireguard
+  gather_facts: true
+  tasks: []
+
+- name: Set the laptop up the way a person would
+  hosts: laptop
+  become: true
+  tasks:
+    - name: Read the public key of the server
+      ansible.builtin.command:
+        cmd: wg show wg0 public-key
+      register: server_public_key
+      changed_when: false
+      delegate_to: wg-server
+
+    - name: Install wireguard-tools
+      ansible.builtin.apt:
+        name: wireguard-tools
+        state: present
+        install_recommends: false
+
+    - name: Write the laptop's config
+      ansible.builtin.copy:
+        dest: /etc/wireguard/wg0.conf
+        mode: "0600"
+        content: |
+          [Interface]
+          PrivateKey = {{ molecule_laptop_private_key }}
+          Address = {{ molecule_laptop_address }}
+
+          [Peer]
+          PublicKey = {{ server_public_key.stdout | trim }}
+          AllowedIPs = 10.99.1.0/24
+          Endpoint = {{ hostvars['wg-server'].ansible_default_ipv4.address }}:51820
+          PersistentKeepalive = 25
+
+    - name: Bring the laptop's tunnel up
+      ansible.builtin.systemd:
+        name: wg-quick@wg0.service
+        state: started
+
+- name: Remember the interfaces before the re-run
+  hosts: wireguard
+  become: true
+  tasks:
+    # wg-quick creates the interface anew on every restart, so the index
+    # changes when the service was restarted and stays when it was not.
+    - name: Record the index of wg0
+      ansible.builtin.copy:
+        content:
+          "{{ ansible_facts.wg0.ifindex | default(ansible_facts.wg0.index |
+          default('unknown')) }}"
+        dest: /root/molecule-ifindex-before
+        mode: "0600"
+
+- name: Add the laptop as a static peer of the server
+  hosts: wireguard
+  become: true
+  vars:
+    # Play vars sit above the group_vars of the scenario, so the server gets
+    # its static peer here and the client keeps its unchanged config.
+    wireguard_peers:
+      "{{ molecule_static_peers[inventory_hostname] | default([]) }}"
+    molecule_static_peers:
+      wg-server:
+        - name: laptop
+          public_key: "{{ hostvars['wg-laptop'].molecule_laptop_public_key }}"
+          allowed_ips:
+            - 10.99.1.3/32
+  roles:
+    - role: wireguard

@@ -1,7 +1,8 @@
 ---
 galaxy_info:
   author: Jonathan Gerdes
-  description: manage one WireGuard interface (wg0) per host
+  description:
+    create the reverse-proxy vhost for the external services in ISPConfig
   license: MIT
   min_ansible_version: 2.21.2
 
@@ -12,8 +13,8 @@ galaxy_info:
         - 24.04
 
   galaxy_tags:
-    - wireguard
-    - vpn
+    - ispconfig
+    - proxy
     - homelab
 
 dependencies: []

@@ -1,0 +1,43 @@
+---
+- name: Start the stub
+  ansible.builtin.import_playbook: ../resources/prepare.yml
+
+- name: Seed a site for the second external name, as the old layout had it
+  hosts: all
+  become: true
+  tasks:
+    - name: Log in
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ molecule_stub_username }}"
+          password: "{{ molecule_stub_password }}"
+        return_content: true
+      register: login
+
+    - name: Create the site
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?sites_web_domain_add"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ login.json.response }}"
+          client_id: 0
+          params:
+            server_id: 1
+            domain: argocd.example.test
+            type: vhost
+        return_content: true
+      register: seeded
+      failed_when: seeded.json.code != 'ok'
+      changed_when: true
+
+    - name: Log out
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?logout"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ login.json.response }}"

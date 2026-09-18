@@ -1,0 +1,50 @@
+---
+# Cross-field rules that meta/argument_specs.yml cannot express. Types,
+# required keys, choices and unknown keys are already rejected by the argument
+# spec before this file runs.
+- name: Validate the API URL and the upstream are URLs
+  ansible.builtin.assert:
+    that:
+      - ispconfig_proxy_api_url is match('^https?://[^/]+/.+$')
+      - ispconfig_proxy_upstream is match('^https?://[^/]+(/.*)?$')
+    fail_msg: >-
+      ispconfig_proxy_api_url is the JSON endpoint of the panel, like
+      https://panel.example.com/remote/json.php, and ispconfig_proxy_upstream a
+      URL with a trailing slash, like https://10.0.0.2/. Got: {{
+      ispconfig_proxy_api_url }} and {{ ispconfig_proxy_upstream }}
+
+- name: Validate the upstream ends with a slash
+  ansible.builtin.assert:
+    that:
+      - ispconfig_proxy_upstream is match('.*/$')
+    fail_msg: >-
+      ispconfig_proxy_upstream must end with a slash, because it is used
+      verbatim in ProxyPass and Apache appends the request path to it. Got: {{
+      ispconfig_proxy_upstream }}
+
+- name: Validate the service names are FQDNs and unique
+  vars:
+    names: "{{ services | map(attribute='name') | list }}"
+    bad_names: >-
+      {{ names | reject('match',
+      '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$') | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_names | length == 0
+      - names | unique | length == names | length
+    fail_msg: >-
+      The name of a service is its full FQDN in lower case, and every name
+      appears once. Not an FQDN: {{ bad_names }}. All names: {{ names }}
+
+- name: Validate no tcp service is external
+  vars:
+    tcp_external: >-
+      {{ services | selectattr('mode', 'defined') | selectattr('mode',
+      'equalto', 'tcp') | selectattr('external', 'defined') |
+      selectattr('external') | map(attribute='name') | list }}
+  ansible.builtin.assert:
+    that:
+      - tcp_external | length == 0
+    fail_msg: >-
+      A service with mode tcp cannot be external: the vhost on the VPS is an
+      HTTP reverse proxy. Services with both: {{ tcp_external }}

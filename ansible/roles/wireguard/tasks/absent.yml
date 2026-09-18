@@ -1,0 +1,22 @@
+---
+# The unit only exists once wg-quick@wg0 was enabled or started; on a host
+# that never ran the present path, or on the second absent run, there is
+# nothing to stop, and the systemd module would fail on the unknown unit.
+- name: Read the service state
+  ansible.builtin.service_facts:
+
+- name: Stop the interface and disable it at boot
+  ansible.builtin.systemd:
+    name: "{{ wireguard_service }}"
+    enabled: false
+    state: stopped
+  when: wireguard_service in ansible_facts.services
+
+- name: Remove the configuration, the private key and the forwarding drop-in
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ wireguard_config_file }}"
+    - "{{ wireguard_private_key_file }}"
+    - "{{ wireguard_sysctl_file }}"

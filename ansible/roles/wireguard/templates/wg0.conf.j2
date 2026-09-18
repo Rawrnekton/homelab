@@ -1,0 +1,33 @@
+# Managed by Ansible (role wireguard). Changes here are overwritten.
+[Interface]
+PrivateKey = {{ wireguard_private_key }}
+Address = {{ wireguard_address }}
+{% if wireguard_listen_port is defined %}
+ListenPort = {{ wireguard_listen_port }}
+{% endif %}
+{% for peer in wireguard_peer_hosts %}
+
+[Peer]
+# {{ peer.host }}
+PublicKey = {{ hostvars[peer.host].wireguard_public_key }}
+AllowedIPs = {{ peer.allowed_ips | join(', ') }}
+{% if peer.endpoint is defined %}
+Endpoint = {{ peer.endpoint }}
+{% endif %}
+{% if peer.persistent_keepalive is defined %}
+PersistentKeepalive = {{ peer.persistent_keepalive }}
+{% endif %}
+{% endfor %}
+{% for peer in wireguard_peers %}
+
+[Peer]
+# {{ peer.name }}
+PublicKey = {{ peer.public_key }}
+AllowedIPs = {{ peer.allowed_ips | join(', ') }}
+{% if peer.endpoint is defined %}
+Endpoint = {{ peer.endpoint }}
+{% endif %}
+{% if peer.persistent_keepalive is defined %}
+PersistentKeepalive = {{ peer.persistent_keepalive }}
+{% endif %}
+{% endfor %}

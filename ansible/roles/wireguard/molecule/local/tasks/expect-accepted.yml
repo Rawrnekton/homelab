@@ -1,0 +1,34 @@
+---
+# Run the role's input validation with the vars the caller set on the include,
+# and record whether it let them through.
+#
+# Caller contract:
+#   case_name - human name of the case, used in the report
+#   plus the wireguard_* variables under test
+#
+# Same tally mechanism as expect-rejected.yml.
+- name: "Case: {{ case_name }}"
+  block:
+    - name: "Submit input: {{ case_name }}"
+      ansible.builtin.include_tasks: validate.yml
+
+    - name: "Record that the input was accepted: {{ case_name }}"
+      ansible.builtin.set_fact:
+        case_outcome:
+          name: "{{ case_name }}"
+          ok: true
+          detail: accepted
+  rescue:
+    - name: "Record the unexpected rejection: {{ case_name }}"
+      ansible.builtin.set_fact:
+        case_outcome:
+          name: "{{ case_name }}"
+          ok: false
+          detail: >-
+            validation rejected a valid input: {{ ansible_failed_result.msg |
+            default('(no message)') | trim }}
+  always:
+    - name: "Add the outcome to the tally: {{ case_name }}"
+      ansible.builtin.set_fact:
+        molecule_case_results:
+          "{{ molecule_case_results | default([]) + [case_outcome] }}"
