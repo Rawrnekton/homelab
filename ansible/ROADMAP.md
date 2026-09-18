@@ -12,10 +12,11 @@ reworked. The `k3s` role is the first one to satisfy that.
 
 ## Status
 
-| Role                        | State                                                                                                                          |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `k3s` (was `cluster-setup`) | Reworked, feature-complete for v1.0.0, 10 molecule scenarios. On branch `refractor/cluster-setup`, not yet reviewed or merged. |
-| everything else             | As scored below.                                                                                                               |
+| Role                                | State                                                                                                                                                           |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `k3s` (was `cluster-setup`)         | Reworked, feature-complete for v1.0.0, 10 molecule scenarios. On branch `refractor/cluster-setup`, not yet reviewed or merged.                                  |
+| `iscsi_client` (was `iscsi-client`) | Brought to the standard, no new features, 4 molecule scenarios against an LIO target in Docker. On branch `refractor/iscsi-client`, not yet reviewed or merged. |
+| everything else                     | As scored below.                                                                                                                                                |
 
 ## How these are scored
 
@@ -73,6 +74,14 @@ quick the fix is:
 ---
 
 ## iscsi-client — 8
+
+> **Reworked.** Renamed to `iscsi_client` (ansible-lint rejects a hyphen in a
+> role name) and brought to the standard on branch `refractor/iscsi-client`
+> (2026-09): argument spec, input validation, four molecule scenarios against an
+> LIO target in Docker, role `CLAUDE.md`. No feature was added. The rework found
+> one defect the 2026-07 read missed: the mountpoint mode was set before the
+> mount, so the second run always reported a change. The finding below is kept
+> as the reason the role scored where it did.
 
 **Still the one to imitate among the roles that have not been reworked.** It is
 not the overall reference any more — `k3s` is, because it ships a declared
