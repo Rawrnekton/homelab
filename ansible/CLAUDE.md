@@ -130,7 +130,9 @@ container image with a trap in it. Each role carries:
 - **`CLAUDE.md`** — the scope lists, the design decisions, the
   variable-to-effect table, the traps, and a **"verified non-issues — do not fix
   these again"** section. Copy that heading verbatim; it is what stops the next
-  pass from re-opening a settled question.
+  pass from re-opening a settled question. The global gitignore on this machine
+  ignores `CLAUDE.md`, so add a new one with `git add -f` once; a tracked file
+  stays tracked.
 - **`HANDOFF.md`** — where the work stopped, the last full test run, what is
   open. A baton, not documentation: delete it when the role is merged.
 - **`README.md` and `meta/main.yml`** — filled in for real, or the
