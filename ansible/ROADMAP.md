@@ -7,9 +7,8 @@ reworked; a reworked role gets a status line instead.
 
 Explicitly **not** scored: presence/quality of `tests/`, `README.md`, and
 `meta/main.yml`. Every role scored here ships the unedited `ansible-galaxy init`
-boilerplate for those. That is no longer "a later pass": it is now
-`ROLE-STANDARD.md`, and it applies while a role is reworked. The `k3s` role is
-the first one to satisfy it.
+boilerplate for those. `CLAUDE.md` rules 5 to 7 now require them while a role is
+reworked. The `k3s` role is the first one to satisfy that.
 
 ## Status
 
@@ -34,7 +33,7 @@ eyeballed into one number:
 5. **Hygiene** - dead code, leftover debug output, secrets handling,
    language/tooling consistency.
 
-See `CONVENTIONS.md` for the rules these questions are checking against.
+See `CLAUDE.md` for the rules these questions are checking against.
 
 ## Scores
 
@@ -78,7 +77,7 @@ quick the fix is:
 **Still the one to imitate among the roles that have not been reworked.** It is
 not the overall reference any more — `k3s` is, because it ships a declared
 contract and a test suite that `iscsi-client` does not have. What `iscsi-client`
-still teaches, and `ROLE-STANDARD.md` does not, is taste: modelling the domain
+still teaches, and `CLAUDE.md` does not, is taste: modelling the domain
 correctly on the first try.
 
 **Why it's the high-water mark:** the variable shape (portal -> targets) matches
@@ -125,8 +124,8 @@ README), but that's a documentation nit, not a scoring one.
 right amount of mechanism for "render some lines into a file."
 
 **Dings:** entirely inherits
-[ground rule 7](CONVENTIONS.md#7-one-cross-role-concept-one-definition)'s
-problem - `dns_services` is one of at least two independently-shaped definitions
+[rule 2](CLAUDE.md#2-metaargument_specsyml-is-the-variable-contract)'s last
+bullet - `dns_services` is one of at least two independently-shaped definitions
 of "a service this homelab exposes." Not this role's fault to fix alone, but
 it's the role most exposed to that duplication going stale.
 
@@ -170,7 +169,7 @@ already isn't modeling "one service" so much as "one server pool that happens to
 serve many services." Self-signed placeholder-cert generation is embedded in
 this role and coupled to `certbot` only through a shared directory convention
 (`/etc/haproxy/ssl/*.pem`), with no shared source of truth for which domains
-should have certs - see `CONVENTIONS.md` rule 7; this is the other place that
+should have certs - see `CLAUDE.md` rule 2; this is the other place that
 duplication actually bites, since a domain added here but forgotten in the
 global `services` list silently keeps its self-signed cert forever.
 
@@ -203,8 +202,8 @@ untouched `ansible-galaxy init` boilerplate.
 > `tasks/validate-variables.yml`, the `debug` task is gone, node readiness is
 > read through `k3s kubectl get --raw /readyz` instead of
 > `kubectl | grep | wc -l`, and ten molecule scenarios cover the topologies. It
-> is the role `ROLE-STANDARD.md` was written from. The 2026-07 finding is kept
-> below, because it is the reason the rework happened.
+> is the role `CLAUDE.md` rules 2, 5 and 6 were written from. The 2026-07
+> finding is kept below, because it is the reason the rework happened.
 
 **Why this is worse than it looks at a glance:** `defaults/main.yml` defines
 `rancher_bootstrap_password`, `rancher_version`, `rancher_replica_count`, and
