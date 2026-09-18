@@ -1,0 +1,11 @@
+---
+# Shared by every scenario through a symlink (molecule looks for
+# collections.yml inside the scenario directory and ignores a
+# requirements-file option pointing elsewhere).
+#
+# community.docker is required by the docker driver's own create/destroy
+# playbooks (molecule_plugins.docker), not by the role. The role itself needs
+# no collection: `uri` is in ansible-core.
+collections:
+  - name: community.docker
+    version: ">=3.10.2"

@@ -1,0 +1,83 @@
+---
+# The vhost as ISPConfig's sites_web_domain_add wants it. Every key is a field
+# of the web_vhost_domain form. The values are the ones the panel writes for a
+# plain site, with three deliberate choices:
+#   - ssl + ssl_letsencrypt: ISPConfig issues and renews the certificate, and
+#     includes every active alias domain in it
+#   - rewrite_to_https: port 80 only redirects
+#   - proxy_protocol "n": counter-intuitive, but "y" breaks the proxy
+# The same dictionary is sent on update, so that ISPConfig's update defaults
+# (it resets an empty pm_max_children to 10) never take over.
+ispconfig_proxy_vhost_params:
+  server_id: "{{ ispconfig_proxy_server_id }}"
+  ip_address: "*"
+  domain: "{{ ispconfig_proxy_external_names[0] }}"
+  type: vhost
+  parent_domain_id: "0"
+  vhost_type: name
+  hd_quota: "100000"
+  traffic_quota: "-1"
+  cgi: "n"
+  ssi: "n"
+  suexec: "y"
+  errordocs: "1"
+  subdomain: none
+  php: "no"
+  proxy_protocol: "n"
+  ruby: "n"
+  redirect_type: ""
+  redirect_path: ""
+  rewrite_to_https: "y"
+  ssl: "y"
+  ssl_letsencrypt: "y"
+  ssl_state: ""
+  ssl_locality: ""
+  ssl_organisation: ""
+  ssl_organisation_unit: ""
+  ssl_country: ""
+  ssl_domain: ""
+  ssl_request: ""
+  ssl_key: ""
+  ssl_cert: ""
+  ssl_bundle: ""
+  ssl_action: ""
+  stats_password: ""
+  stats_type: ""
+  allow_override: All
+  apache_directives: "{{ ispconfig_proxy_apache_directives }}"
+  php_open_basedir: /
+  custom_php_ini: ""
+  pm: ondemand
+  pm_max_children: "500"
+  pm_max_requests: "0"
+  pm_process_idle_timeout: "5"
+  backup_interval: daily
+  backup_copies: "7"
+  active: "y"
+  traffic_quota_lock: "n"
+  http_port: "80"
+  https_port: "443"
+
+# The Apache side of the proxy. ACME challenges stay local, so that ISPConfig
+# can issue the certificate; everything else goes to the upstream.
+ispconfig_proxy_apache_directives: |-
+  SSLProxyEngine     on
+  ProxyPreserveHost  on
+  Protocols          http/1.1
+
+  ProxyPass          /.well-known/acme-challenge !
+  ProxyPass          /  {{ ispconfig_proxy_upstream }}  upgrade=websocket keepalive=On
+  ProxyPassReverse   /  {{ ispconfig_proxy_upstream }}
+
+  RequestHeader set X-Forwarded-Proto "https"
+
+# An alias domain as sites_web_aliasdomain_add wants it (web_childdomain
+# form). `type` has to be sent: the form's own default is not a valid type.
+ispconfig_proxy_alias_params:
+  server_id: "{{ ispconfig_proxy_server_id }}"
+  type: alias
+  parent_domain_id: "{{ ispconfig_proxy_vhost_id }}"
+  redirect_type: ""
+  redirect_path: ""
+  ssl_letsencrypt_exclude: "n"
+  active: "y"

@@ -1,0 +1,204 @@
+---
+# Fail fast: once the interface is missing, the assertions behind it mean
+# nothing.
+#
+# Effect over rendering: the interface, its address, its peers and the
+# handshakes are read from the kernel through `wg` and the network facts; the
+# config file is only checked for its mode, which wg-quick itself demands.
+- name: Read what every end knows about itself
+  hosts: wireguard
+  become: true
+  tasks:
+    # wg-quick@wg0 is an instance of a template unit and a oneshot with
+    # RemainAfterExit: service_facts sees neither its enablement nor a running
+    # process. systemctl is the tool that knows, so it is asked directly.
+    # command, not the systemd module: that module refuses to run without a
+    # state or enabled to enforce, and enforcing would hide what the role did.
+    - name: Ask systemd about the unit
+      ansible.builtin.command: # noqa: command-instead-of-module
+        cmd: systemctl {{ item }} wg-quick@wg0.service
+      register: unit_state
+      changed_when: false
+      loop:
+        - is-enabled
+        - is-active
+
+    - name: The interface is up and comes up at boot
+      ansible.builtin.assert:
+        that:
+          - unit_state.results[0].stdout == 'enabled'
+          - unit_state.results[1].stdout == 'active'
+        fail_msg:
+          "wg-quick@wg0 on {{ inventory_hostname }}: {{ unit_state.results |
+          map(attribute='stdout') | list }}"
+
+    - name: The interface carries the tunnel address
+      ansible.builtin.assert:
+        that:
+          - "'wg0' in ansible_facts.interfaces"
+          - ansible_facts.wg0.ipv4.address == wireguard_address |
+            ansible.utils.ipaddr('address')
+        fail_msg:
+          "wg0 on {{ inventory_hostname }}: {{ ansible_facts.wg0 |
+          default('missing') }}"
+
+    - name: Read the public key the kernel uses
+      ansible.builtin.command:
+        cmd: wg show wg0 public-key
+      register: kernel_public_key
+      changed_when: false
+
+    - name: Read the private key the kernel uses
+      ansible.builtin.command:
+        cmd: wg show wg0 private-key
+      register: kernel_private_key
+      changed_when: false
+      no_log: true
+
+    - name: Read the private key file
+      ansible.builtin.slurp:
+        src: /etc/wireguard/private.key
+      register: private_key_file
+      no_log: true
+
+    # The key the interface runs with is the key in the file, so a re-run
+    # (the idempotence step came before verify) did not regenerate it.
+    - name: The interface runs with the key from the file
+      ansible.builtin.assert:
+        that:
+          - kernel_private_key.stdout | trim == private_key_file.content |
+            b64decode | trim
+      no_log: true
+
+    - name: Keep the public key for the other end
+      ansible.builtin.set_fact:
+        molecule_public_key: "{{ kernel_public_key.stdout | trim }}"
+
+    - name: Read the modes of the files that hold the key
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: key_files
+      loop:
+        - /etc/wireguard/private.key
+        - /etc/wireguard/wg0.conf
+
+    - name: Only root can read them
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.mode == '0600'
+          - item.stat.pw_name == 'root'
+        fail_msg: "{{ item.item }}: {{ item.stat.mode | default('missing') }}"
+      loop: "{{ key_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+- name: Check each end against the other
+  hosts: wireguard
+  become: true
+  tasks:
+    - name: Read the peers of the interface
+      ansible.builtin.command:
+        cmd: wg show wg0 dump
+      register: wg_dump
+      changed_when: false
+      no_log: true
+
+    # Line 1 is the interface: private-key public-key listen-port fwmark.
+    # Every further line is a peer: public-key preshared-key endpoint
+    # allowed-ips latest-handshake rx tx keepalive.
+    - name: Split the dump into peers
+      ansible.builtin.set_fact:
+        wg_interface: "{{ wg_dump.stdout_lines[0].split('\t') }}"
+        wg_peers: "{{ wg_dump.stdout_lines[1:] | map('split', '\t') | list }}"
+      no_log: true
+
+    - name: Every managed peer is on the interface with its allowed IPs
+      vars:
+        peer:
+          "{{ wg_peers | selectattr('0', 'equalto',
+          hostvars[item.host].molecule_public_key) | list }}"
+      ansible.builtin.assert:
+        that:
+          - wg_peers | length == wireguard_peer_hosts | length
+          - peer | length == 1
+          - peer[0][3].split(',') | sort == item.allowed_ips | sort
+          - (peer[0][7] | string) == (item.persistent_keepalive | default('off')
+            | string)
+        fail_msg: "Peer {{ item.host }} on {{ inventory_hostname }}: {{ peer }}"
+      loop: "{{ wireguard_peer_hosts }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: The listening end listens on its port, the other on none it chose
+      ansible.builtin.assert:
+        that:
+          - wg_interface[2] | int == wireguard_listen_port | default(0) | int or
+            wireguard_listen_port is not defined
+        fail_msg:
+          "Listen port on {{ inventory_hostname }}: {{ wg_interface[2] }}"
+
+- name: Send packets through the tunnel
+  hosts: wireguard
+  become: true
+  tasks:
+    # Both directions: the client reaches the server, and the server reaches
+    # the client, which only works once the handshake taught the server where
+    # the client is.
+    - name: Ping every managed peer through the tunnel
+      ansible.builtin.command:
+        cmd:
+          ping -c 3 -W 2 {{ hostvars[item.host].wireguard_address |
+          ansible.utils.ipaddr('address') }}
+      loop: "{{ wireguard_peer_hosts }}"
+      loop_control:
+        label: "{{ item.host }}"
+      register: pings
+      changed_when: false
+      retries: 5
+      delay: 3
+      until: pings.rc == 0
+
+    - name: Read the handshakes
+      ansible.builtin.command:
+        cmd: wg show wg0 latest-handshakes
+      register: handshakes
+      changed_when: false
+
+    - name: Every peer completed a handshake
+      ansible.builtin.assert:
+        that:
+          - handshakes.stdout_lines | map('split', '\t') | map('last') |
+            map('int') | select('gt', 0) | list | length == wireguard_peer_hosts
+            | length
+        fail_msg:
+          "Handshakes on {{ inventory_hostname }}: {{ handshakes.stdout }}"
+
+- name: Check the forwarding switch
+  hosts: wireguard
+  become: true
+  vars:
+    # Role defaults are not in scope in a verify play; the client leaves the
+    # switch out and means false.
+    forwarding: "{{ wireguard_ip_forward | default(false) }}"
+  tasks:
+    - name: Read the live value
+      ansible.builtin.slurp:
+        src: /proc/sys/net/ipv4/ip_forward
+      register: ip_forward
+
+    - name: Read the drop-in
+      ansible.builtin.stat:
+        path: /etc/sysctl.d/99-wireguard.conf
+      register: sysctl_dropin
+
+    - name:
+        The relaying end forwards and owns the drop-in, the other has no drop-in
+      ansible.builtin.assert:
+        that:
+          - sysctl_dropin.stat.exists == forwarding
+          - not forwarding or (ip_forward.content | b64decode | trim) == '1'
+        fail_msg: >-
+          {{ inventory_hostname }}: ip_forward={{ ip_forward.content | b64decode
+          | trim }}, drop-in exists={{ sysctl_dropin.stat.exists }}, wanted {{
+          forwarding }}

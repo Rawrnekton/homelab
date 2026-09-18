@@ -1,0 +1,88 @@
+---
+# Fail fast. The order of the pings matters: the server restarted when it
+# gained the peer and forgot where the client is, so the client pings first
+# and teaches it. After that the laptop's packets to the client are relayed.
+- name: The client reaches the server after the restart
+  hosts: client
+  become: true
+  tasks:
+    - name: Ping the server
+      ansible.builtin.command:
+        cmd: ping -c 3 -W 2 10.99.1.1
+      register: ping_server
+      changed_when: false
+      retries: 5
+      delay: 3
+      until: ping_server.rc == 0
+
+- name: The laptop reaches both ends
+  hosts: laptop
+  become: true
+  tasks:
+    - name: Ping the server directly
+      ansible.builtin.command:
+        cmd: ping -c 3 -W 2 10.99.1.1
+      register: ping_server
+      changed_when: false
+      retries: 5
+      delay: 3
+      until: ping_server.rc == 0
+
+    - name: Ping the client through the server
+      ansible.builtin.command:
+        cmd: ping -c 3 -W 2 10.99.1.2
+      register: ping_client
+      changed_when: false
+      retries: 5
+      delay: 3
+      until: ping_client.rc == 0
+
+- name: The server lists the laptop and the client was left alone
+  hosts: wireguard
+  become: true
+  tasks:
+    - name: Read the peers of the interface
+      ansible.builtin.command:
+        cmd: wg show wg0 allowed-ips
+      register: allowed_ips
+      changed_when: false
+
+    # `wg show allowed-ips` prints one line per peer: the public key, a tab,
+    # the allowed IPs. Split on whitespace; a "\t" inside a Jinja string is
+    # not a tab.
+    - name: The static peer is on the server with its allowed IPs
+      vars:
+        laptop_lines: >-
+          {{ allowed_ips.stdout_lines | map('split') | selectattr('0',
+          'equalto', hostvars['wg-laptop'].molecule_laptop_public_key) | list }}
+      ansible.builtin.assert:
+        that:
+          - laptop_lines | length == 1
+          - laptop_lines[0][1:] == ['10.99.1.3/32']
+        fail_msg: "Peers on the server: {{ allowed_ips.stdout }}"
+      when: inventory_hostname in groups['server']
+
+    - name: The client knows only the server
+      ansible.builtin.assert:
+        that:
+          - allowed_ips.stdout_lines | length == 1
+          - hostvars['wg-laptop'].molecule_laptop_public_key not in
+            allowed_ips.stdout
+        fail_msg: "Peers on the client: {{ allowed_ips.stdout }}"
+      when: inventory_hostname in groups['client']
+
+    - name: Read the index recorded before the re-run
+      ansible.builtin.slurp:
+        src: /root/molecule-ifindex-before
+      register: ifindex_before
+
+    - name: The client's interface is the one from before the re-run
+      ansible.builtin.assert:
+        that:
+          - (ifindex_before.content | b64decode | trim) ==
+            (ansible_facts.wg0.ifindex | default(ansible_facts.wg0.index |
+            default('unknown')) | string)
+        fail_msg: >-
+          wg0 on the client was recreated: index {{ ifindex_before.content |
+          b64decode | trim }} before, {{ ansible_facts.wg0 }} now.
+      when: inventory_hostname in groups['client']

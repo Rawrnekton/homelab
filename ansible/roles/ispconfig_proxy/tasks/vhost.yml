@@ -1,0 +1,221 @@
+---
+# One session for everything, closed in `always`, so that a failed run does
+# not leave a remote session open until ISPConfig expires it.
+#
+# The API answers HTTP 200 to everything and reports errors in the body, as
+# {"code": "remote_fault", "message": ..., "response": false}. Every call
+# therefore checks `code`, and the `uri` module's own status check adds
+# nothing. `uri` is the right tool here: there is no module for ISPConfig.
+- name: Talk to the ISPConfig API
+  block:
+    - name: Log in to the API
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ ispconfig_proxy_username }}"
+          password: "{{ ispconfig_proxy_password }}"
+        return_content: true
+      register: ispconfig_proxy_login
+      failed_when: ispconfig_proxy_login.json.code != 'ok'
+      no_log: true
+      changed_when: false
+      check_mode: false
+
+    - name: Keep the session id
+      ansible.builtin.set_fact:
+        ispconfig_proxy_session_id: "{{ ispconfig_proxy_login.json.response }}"
+      no_log: true
+
+    # --- The vhost -------------------------------------------------------
+    - name: Read the vhost by its domain
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?sites_web_domain_get"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ ispconfig_proxy_session_id }}"
+          primary_id:
+            domain: "{{ ispconfig_proxy_external_names[0] }}"
+        return_content: true
+      register: ispconfig_proxy_vhost_read
+      failed_when: ispconfig_proxy_vhost_read.json.code != 'ok'
+      changed_when: false
+      check_mode: false
+
+    # The domain column is unique across sites, aliases and subdomains, so
+    # the read returns one record or none. A record of another type means the
+    # name is taken by something this role does not manage; say so instead of
+    # creating a second site with the same name, which ISPConfig rejects with
+    # a less useful message.
+    - name: The first external name is free or a vhost
+      vars:
+        found: "{{ ispconfig_proxy_vhost_read.json.response }}"
+      ansible.builtin.assert:
+        that:
+          - found | length <= 1
+          - found | length == 0 or found[0].type == 'vhost'
+        fail_msg: >-
+          {{ ispconfig_proxy_external_names[0] }} exists in ISPConfig as a {{
+          found[0].type | default('?') }} (domain_id {{ found[0].domain_id |
+          default('?') }}), not as a site. Delete it in the panel, or make
+          another service the first external one.
+
+    - name: Create the vhost
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?sites_web_domain_add"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ ispconfig_proxy_session_id }}"
+          client_id: "{{ ispconfig_proxy_client_id }}"
+          params: "{{ ispconfig_proxy_vhost_params }}"
+        return_content: true
+      register: ispconfig_proxy_vhost_add
+      failed_when: ispconfig_proxy_vhost_add.json.code != 'ok'
+      changed_when: true
+      when: ispconfig_proxy_vhost_read.json.response | length == 0
+
+    - name: Keep the id of the vhost
+      ansible.builtin.set_fact:
+        ispconfig_proxy_vhost_id: >-
+          {{ ispconfig_proxy_vhost_add.json.response if
+          ispconfig_proxy_vhost_add is not skipped else
+          ispconfig_proxy_vhost_read.json.response[0].domain_id }}
+
+    # Line endings are normalised on both sides: the panel saves CRLF when a
+    # person edits the directives there, the API saves what it gets.
+    - name: Update the vhost when its directives differ
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?sites_web_domain_update"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ ispconfig_proxy_session_id }}"
+          client_id: "{{ ispconfig_proxy_client_id }}"
+          primary_id: "{{ ispconfig_proxy_vhost_id }}"
+          params: "{{ ispconfig_proxy_vhost_params }}"
+        return_content: true
+      register: ispconfig_proxy_vhost_update
+      failed_when: ispconfig_proxy_vhost_update.json.code != 'ok'
+      changed_when: true
+      when:
+        - ispconfig_proxy_vhost_add is skipped
+        - >-
+          ispconfig_proxy_vhost_read.json.response[0].apache_directives |
+          default('') | replace('\r\n', '\n') | trim !=
+          ispconfig_proxy_apache_directives | trim
+
+    # --- The alias domains ------------------------------------------------
+    - name: Read the alias domains of the vhost
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?sites_web_domain_get"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ ispconfig_proxy_session_id }}"
+          primary_id:
+            parent_domain_id: "{{ ispconfig_proxy_vhost_id }}"
+            type: alias
+        return_content: true
+      register: ispconfig_proxy_alias_read
+      failed_when: ispconfig_proxy_alias_read.json.code != 'ok'
+      changed_when: false
+      check_mode: false
+
+    - name: Work out which aliases to add and which to remove
+      vars:
+        wanted: "{{ ispconfig_proxy_external_names[1:] }}"
+        current:
+          "{{ ispconfig_proxy_alias_read.json.response | map(attribute='domain')
+          | list }}"
+      ansible.builtin.set_fact:
+        ispconfig_proxy_aliases_to_add:
+          "{{ wanted | reject('in', current) | list }}"
+        ispconfig_proxy_aliases_to_remove: >-
+          {{ ispconfig_proxy_alias_read.json.response | rejectattr('domain',
+          'in', wanted) | list }}
+
+    # Same reason as for the vhost: a name that already exists as a site of
+    # its own (the layout before this role: one site per service) or as an
+    # alias elsewhere is not taken over. The person decides in the panel.
+    - name: Read every alias name that is not on the vhost yet
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?sites_web_domain_get"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ ispconfig_proxy_session_id }}"
+          primary_id:
+            domain: "{{ item }}"
+        return_content: true
+      register: ispconfig_proxy_alias_name_read
+      failed_when: ispconfig_proxy_alias_name_read.json.code != 'ok'
+      changed_when: false
+      check_mode: false
+      loop: "{{ ispconfig_proxy_aliases_to_add }}"
+
+    - name: Every alias name to add is free
+      vars:
+        taken: >-
+          {{ ispconfig_proxy_alias_name_read.results |
+          selectattr('json.response', 'defined') | rejectattr('json.response',
+          'equalto', []) | map(attribute='json.response') | map('first') | list
+          }}
+      ansible.builtin.assert:
+        that:
+          - taken | length == 0
+        fail_msg: >-
+          These names exist in ISPConfig already and are not alias domains of {{
+          ispconfig_proxy_external_names[0] }}: {% for rec in taken %}{{
+          rec.domain }} ({{ rec.type }}, domain_id {{ rec.domain_id }}){% if not
+          loop.last %}, {% endif %}{% endfor %}. Delete them in the panel so
+          that this role can add them as alias domains.
+
+    - name: Add the missing alias domains
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?sites_web_aliasdomain_add"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ ispconfig_proxy_session_id }}"
+          client_id: "{{ ispconfig_proxy_client_id }}"
+          params:
+            "{{ ispconfig_proxy_alias_params | combine({'domain': item}) }}"
+        return_content: true
+      register: ispconfig_proxy_alias_add
+      failed_when: ispconfig_proxy_alias_add.json.code != 'ok'
+      changed_when: true
+      loop: "{{ ispconfig_proxy_aliases_to_add }}"
+
+    - name: Remove the alias domains that left the list
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?sites_web_aliasdomain_delete"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ ispconfig_proxy_session_id }}"
+          primary_id: "{{ item.domain_id }}"
+        return_content: true
+      register: ispconfig_proxy_alias_delete
+      failed_when: ispconfig_proxy_alias_delete.json.code != 'ok'
+      changed_when: true
+      loop: "{{ ispconfig_proxy_aliases_to_remove }}"
+      loop_control:
+        label: "{{ item.domain }}"
+
+  always:
+    - name: Log out of the API
+      ansible.builtin.uri:
+        url: "{{ ispconfig_proxy_api_url }}?logout"
+        method: POST
+        body_format: json
+        body:
+          session_id: "{{ ispconfig_proxy_session_id }}"
+        return_content: true
+      register: ispconfig_proxy_logout
+      failed_when: ispconfig_proxy_logout.json.code != 'ok'
+      changed_when: false
+      check_mode: false
+      when: ispconfig_proxy_session_id is defined

@@ -1,0 +1,60 @@
+---
+# Conflict scenario: a name that exists as a site of its own.
+#
+# Goal: the layout the homelab had before this role, one site per external
+# service, is not taken over silently. prepare seeds the stub with a site for
+# the second external name; converge expects the role to fail and names the
+# site in its message; verify checks that the stub was left as it was.
+#
+# No idempotence step: converge is a play that expects a failure.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - name: ispconfig-vps
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  inventory:
+    group_vars:
+      all:
+        molecule_stub_username: remote
+        molecule_stub_password: remote-secret
+        ispconfig_proxy_api_url: http://127.0.0.1:8080/remote/json.php
+        ispconfig_proxy_username: remote
+        ispconfig_proxy_password: remote-secret
+        ispconfig_proxy_upstream: https://10.0.0.2/
+        services:
+          - name: mealie.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+          - name: argocd.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy

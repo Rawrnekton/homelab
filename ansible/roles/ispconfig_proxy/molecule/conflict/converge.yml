@@ -1,0 +1,22 @@
+---
+# The role must fail, and say which name is in the way.
+- name: Run the role against a name that is a site of its own
+  hosts: all
+  become: true
+  tasks:
+    - name: Run the role and expect a failure
+      block:
+        - name: Run the role
+          ansible.builtin.include_role:
+            name: ispconfig_proxy
+
+        - name: The role did not fail
+          ansible.builtin.fail:
+            msg: The role accepted a name that exists as a site of its own.
+      rescue:
+        - name: The failure names the site in the way
+          ansible.builtin.assert:
+            that:
+              - "'argocd.example.test (vhost, domain_id 1)' in
+                ansible_failed_result.msg | default('')"
+            fail_msg: "Unexpected failure: {{ ansible_failed_result }}"

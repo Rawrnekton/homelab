@@ -1,0 +1,69 @@
+---
+# Default scenario: the homelab shape against the stub.
+#
+# Goal: three external services, two internal ones and a tcp service. After
+# converge and the idempotence run the stub holds exactly one site, named
+# after the first external service, with the proxy directives and Let's
+# Encrypt on, and one alias domain per further external name. The internal
+# names and the tcp name are nowhere. sites_web_domain_add was called once.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - name: ispconfig-vps
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      all:
+        molecule_stub_username: remote
+        molecule_stub_password: remote-secret
+        ispconfig_proxy_api_url: http://127.0.0.1:8080/remote/json.php
+        ispconfig_proxy_username: remote
+        ispconfig_proxy_password: remote-secret
+        ispconfig_proxy_upstream: https://10.0.0.2/
+        services:
+          - name: mealie.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+          - name: rancher.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+          - name: argocd.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+          - name: whoami.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: false
+          - name: auth.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            mode: https
+            external: true
+          - name: mqtt.example.test
+            dns_target: 192.0.2.10
+            backend: mqtt
+            mode: tcp
+            listen_port: 1883
+verifier:
+  name: ansible

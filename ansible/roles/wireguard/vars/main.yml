@@ -1,2 +1,8 @@
 ---
-# vars file for wireguard
+# The role manages exactly one interface, by scope. These are not inputs.
+wireguard_interface: wg0
+wireguard_config_dir: /etc/wireguard
+wireguard_private_key_file: /etc/wireguard/private.key
+wireguard_config_file: /etc/wireguard/wg0.conf
+wireguard_sysctl_file: /etc/sysctl.d/99-wireguard.conf
+wireguard_service: wg-quick@wg0.service

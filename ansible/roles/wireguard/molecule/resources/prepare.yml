@@ -1,0 +1,55 @@
+---
+# Every container is a tunnel end and needs the same two things: apt that
+# works on a user-defined Docker network, and the wireguard kernel module.
+- name: Prepare every container
+  hosts: all
+  become: true
+  tasks:
+    # Docker's embedded DNS answers with AAAA records, but a container on a
+    # user-defined bridge network has no IPv6 route. apt then sits on a dead
+    # connection until it times out. Forcing IPv4 is the whole fix.
+    - name: Make apt use IPv4
+      ansible.builtin.copy:
+        content: 'Acquire::ForceIPv4 "true";'
+        dest: /etc/apt/apt.conf.d/99-molecule-force-ipv4
+        mode: "0644"
+
+    - name: Refresh the package index
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    # ping is what verify uses to prove that packets cross the tunnel.
+    - name: Install ping
+      ansible.builtin.apt:
+        name: iputils-ping
+        state: present
+
+# `ip link add type wireguard` makes the kernel load the module on its own,
+# from the host, so no container needs /lib/modules. It has to be there on the
+# host, though, and this is the place to find out.
+- name: Check the host kernel
+  hosts: all
+  become: true
+  run_once: true
+  tasks:
+    - name: Create a throwaway wireguard interface
+      ansible.builtin.command:
+        cmd: ip link add molecule-probe type wireguard
+      register: probe
+      changed_when: true
+      failed_when: false
+
+    - name: Fail with a hint when the kernel has no wireguard
+      ansible.builtin.assert:
+        that:
+          - probe.rc == 0
+        fail_msg: >-
+          The host kernel could not create a wireguard interface ({{
+          probe.stderr }}). Load the module on the host (modprobe wireguard) and
+          run the scenario again.
+
+    - name: Remove the probe interface
+      ansible.builtin.command:
+        cmd: ip link delete molecule-probe
+      changed_when: true

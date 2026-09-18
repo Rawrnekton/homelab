@@ -1,0 +1,23 @@
+---
+- name: Verify nothing was taken over
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the state of the stub
+      ansible.builtin.import_tasks: ../resources/tasks/read-state.yml
+
+    - name:
+        The seeded site is untouched, the role's own site exists, no alias was
+        added
+      ansible.builtin.assert:
+        that:
+          - stub.records | selectattr('domain', 'equalto',
+            'argocd.example.test') | map(attribute='type') | list == ['vhost']
+          - stub.records | selectattr('domain', 'equalto',
+            'mealie.example.test') | map(attribute='type') | list == ['vhost']
+          - stub.records | selectattr('type', 'equalto', 'alias') | list |
+            length == 0
+          - stub.calls.sites_web_aliasdomain_add | default(0) == 0
+          - stub.calls.sites_web_aliasdomain_delete | default(0) == 0
+          - stub.sessions | length == 0
+        fail_msg: "Rows: {{ stub.records }}, calls: {{ stub.calls }}"

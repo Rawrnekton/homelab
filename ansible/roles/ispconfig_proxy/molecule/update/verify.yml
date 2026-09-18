@@ -1,0 +1,43 @@
+---
+- name: Verify the site was updated in place
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the state of the stub
+      ansible.builtin.import_tasks: ../resources/tasks/read-state.yml
+
+    - name: One site, the first ever created, with the new upstream
+      vars:
+        sites:
+          "{{ stub.records | selectattr('type', 'equalto', 'vhost') | list }}"
+      ansible.builtin.assert:
+        that:
+          - sites | length == 1
+          - sites[0].domain_id == 1
+          - sites[0].domain == 'mealie.example.test'
+          - "'https://10.0.0.4/' in sites[0].apache_directives"
+          - "'https://10.0.0.2/' not in sites[0].apache_directives"
+          - sites[0].pm_max_children == '500'
+        fail_msg: "Sites in the stub: {{ sites }}"
+
+    - name: The alias list follows the services list
+      vars:
+        aliases:
+          "{{ stub.records | selectattr('type', 'equalto', 'alias') | list }}"
+      ansible.builtin.assert:
+        that:
+          - aliases | map(attribute='domain') | sort == ['auth.example.test',
+            'todo.example.test']
+          - aliases | map(attribute='parent_domain_id') | map('string') | unique
+            == ['1']
+        fail_msg: "Aliases in the stub: {{ aliases }}"
+
+    - name: The site was created once and updated once
+      ansible.builtin.assert:
+        that:
+          - stub.calls.sites_web_domain_add == 1
+          - stub.calls.sites_web_domain_update == 1
+          - stub.calls.sites_web_aliasdomain_add == 3
+          - stub.calls.sites_web_aliasdomain_delete == 1
+          - stub.sessions | length == 0
+        fail_msg: "Calls: {{ stub.calls }}"

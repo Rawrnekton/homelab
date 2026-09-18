@@ -1,0 +1,102 @@
+---
+# Role argument specification — the schema/contract for this role's variables.
+#
+# Validated automatically before any task in `main` runs (fail fast on bad
+# input), and rendered as documentation by
+# `ansible-doc -t role ... ispconfig_proxy`.
+#
+# Prose descriptions live HERE (single source of truth); defaults/main.yml
+# holds the actual values with only terse orienting comments.
+argument_specs:
+  main:
+    short_description:
+      Create the reverse-proxy vhost for the external services in ISPConfig.
+    description:
+      - Runs on the host that serves ISPConfig and talks to its JSON API there.
+        One vhost carries every service with C(external) set, the first name as
+        the domain and the others as alias domains, with Apache directives that
+        proxy everything to C(ispconfig_proxy_upstream) and a Let's Encrypt
+        certificate that ISPConfig issues for all of them.
+      - The vhost is read first, created when missing, and updated when its
+        directives or its alias list differ. It is never deleted, not even when
+        the last external service leaves the list.
+    author:
+      - Jonathan Gerdes
+    options:
+      ispconfig_proxy_api_url:
+        type: str
+        required: true
+        description:
+          - The JSON endpoint of the ISPConfig remote API, for example
+            C(https://panel.example.com/remote/json.php). The method name is
+            appended as the query string.
+      ispconfig_proxy_username:
+        type: str
+        required: true
+        description: Remote user of the ISPConfig API (System > Remote Users).
+      ispconfig_proxy_password:
+        type: str
+        required: true
+        no_log: true
+        description: Password of that remote user.
+      ispconfig_proxy_upstream:
+        type: str
+        required: true
+        description:
+          - Where the vhost proxies to, as a URL with a trailing slash, for
+            example C(https://10.0.0.2/). In the homelab this is the tunnel
+            address of the gateway; it is written down here on purpose and not
+            derived from the wireguard variables.
+      ispconfig_proxy_server_id:
+        type: int
+        required: false
+        default: 1
+        description: The C(server_id) in ISPConfig that hosts the vhost.
+      ispconfig_proxy_client_id:
+        type: int
+        required: false
+        default: 0
+        description:
+          - The ISPConfig client the vhost belongs to. C(0) is the admin.
+      services:
+        type: list
+        elements: dict
+        required: true
+        description:
+          - The services this homelab exposes, declared once in
+            C(group_vars/all) and read by every role that needs them. This role
+            reads C(name) and C(external) and ignores the rest; the shape is
+            declared in full so that a typo in any key fails here too.
+        options:
+          name:
+            type: str
+            required: true
+            description: The full FQDN of the service.
+          dns_target:
+            type: str
+            required: true
+            description: The A record the dns role writes. Not read here.
+          backend:
+            type: str
+            required: true
+            description: The haproxy pool the service points at. Not read here.
+          mode:
+            type: str
+            required: false
+            choices:
+              - https
+              - tcp
+            description:
+              - C(https) when omitted. A C(tcp) service cannot be external,
+                because the vhost is an HTTP reverse proxy.
+          listen_port:
+            type: int
+            required: false
+            description:
+              The haproxy frontend port of a C(tcp) service. Not read here.
+          external:
+            type: bool
+            required: false
+            description:
+              - C(false) when omitted. C(true) means exactly that the vhost
+                carries this name.

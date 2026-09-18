@@ -1,0 +1,108 @@
+---
+# wireguard-tools only. The kernel module ships with every kernel since 5.6,
+# and the `wireguard` metapackage adds nothing but a recommendation of
+# wireguard-dkms, which a container (the molecule scenarios) cannot satisfy.
+- name: Install wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+    install_recommends: false
+
+- name: Create the configuration directory
+  ansible.builtin.file:
+    path: "{{ wireguard_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# shell, not a module: no module generates a Curve25519 key, and `wg genkey`
+# only prints it. The redirect writes it in one step with a private umask, and
+# `creates` makes the second run a no-op, so the key of a host never changes.
+- name: Generate the private key on the first run
+  ansible.builtin.shell:
+    cmd: umask 077 && wg genkey > {{ wireguard_private_key_file }}
+    creates: "{{ wireguard_private_key_file }}"
+
+- name: Read the private key
+  ansible.builtin.slurp:
+    src: "{{ wireguard_private_key_file }}"
+  register: wireguard_private_key_slurp
+  no_log: true
+
+- name: Keep the private key for the template
+  ansible.builtin.set_fact:
+    wireguard_private_key:
+      "{{ wireguard_private_key_slurp.content | b64decode | trim }}"
+  no_log: true
+
+# A pure computation: `wg pubkey` reads the private key and prints the public
+# one, and changes nothing on the host. That is why changed_when is false.
+- name: Derive the public key
+  ansible.builtin.command:
+    cmd: wg pubkey
+    stdin: "{{ wireguard_private_key }}"
+  register: wireguard_pubkey_cmd
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+# Host-scoped fact: the peers read it as hostvars[<host>].wireguard_public_key.
+- name: Publish the public key in the facts of this host
+  ansible.builtin.set_fact:
+    wireguard_public_key: "{{ wireguard_pubkey_cmd.stdout | trim }}"
+
+# The peers' public keys exist only after the task above ran on them, in this
+# play. A peer that is absent from the play, failed earlier, or runs with
+# wireguard_state absent has no key to read, and the template would fail with
+# an undefined-attribute error deep inside Jinja. This says what is missing.
+- name: Check that every managed peer published its public key
+  vars:
+    peers_without_key: >-
+      {%- set missing = [] -%} {%- for host in wireguard_peer_hosts |
+      map(attribute='host') -%}
+        {%- if host not in ansible_play_hosts
+              or hostvars[host].wireguard_public_key is not defined -%}
+          {%- set _ = missing.append(host) -%}
+        {%- endif -%}
+      {%- endfor -%} {{ missing }}
+  ansible.builtin.assert:
+    that:
+      - peers_without_key | length == 0
+    fail_msg: >-
+      A host in wireguard_peer_hosts must run this role in the same play, with
+      wireguard_state present, so that its public key is in its facts. No key
+      from: {{ peers_without_key }}
+
+- name: Enable IPv4 forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: "{{ wireguard_sysctl_file }}"
+    sysctl_set: true
+    reload: true
+  when: wireguard_ip_forward
+
+# The drop-in goes, the live value stays: a container runtime or another
+# tunnel on the host may need forwarding, and this role only owns its file.
+- name: Remove the forwarding drop-in
+  ansible.builtin.file:
+    path: "{{ wireguard_sysctl_file }}"
+    state: absent
+  when: not wireguard_ip_forward
+
+- name: Write the interface configuration
+  ansible.builtin.template:
+    src: wg0.conf.j2
+    dest: "{{ wireguard_config_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart wireguard
+
+- name: Start the interface at boot and now
+  ansible.builtin.systemd:
+    name: "{{ wireguard_service }}"
+    enabled: true
+    state: started

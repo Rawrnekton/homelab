@@ -1,0 +1,8 @@
+---
+# Shared by every scenario. Both tunnel ends are in one play, because a
+# managed peer reads the public key of the other end out of its facts.
+- name: Converge
+  hosts: wireguard
+  become: true
+  roles:
+    - role: wireguard

@@ -1,0 +1,76 @@
+---
+# Uninstall scenario: the two tunnel ends, then wireguard_state absent.
+#
+# Goal: absent takes the interface down and removes the config, the private
+# key and the forwarding drop-in on both kinds of end, twice in a row, and
+# leaves the package alone. converge installs, side_effect removes twice,
+# verify looks for leftovers.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &container
+    name: wg-server
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: wireguard-molecule-uninstall
+    network_mode: wireguard-molecule-uninstall
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - wireguard
+      - server
+  - <<: *container
+    name: wg-client
+    groups:
+      - wireguard
+      - client
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      server:
+        wireguard_address: 10.99.2.1/24
+        wireguard_listen_port: 51820
+        wireguard_ip_forward: true
+        wireguard_peer_hosts:
+          - host: wg-client
+            allowed_ips:
+              - 10.99.2.2/32
+      client:
+        wireguard_address: 10.99.2.2/24
+        wireguard_peer_hosts:
+          - host: wg-server
+            allowed_ips:
+              - 10.99.2.0/24
+            endpoint:
+              "{{ hostvars['wg-server'].ansible_default_ipv4.address }}:51820"
+            persistent_keepalive: 25
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy

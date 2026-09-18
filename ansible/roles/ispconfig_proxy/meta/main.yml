@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  author: Jonathan Gerdes
+  description:
+    create the reverse-proxy vhost for the external services in ISPConfig
+  license: MIT
+  min_ansible_version: 2.21.2
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - 22.04
+        - 24.04
+
+  galaxy_tags:
+    - ispconfig
+    - proxy
+    - homelab
+
+dependencies: []

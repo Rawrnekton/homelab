@@ -1,0 +1,227 @@
+---
+# Converge: the input contract, checked on the controller.
+#
+# This scenario has no verify playbook on purpose. A rejected input must make
+# the play that submits it fail, so the assertions live here, in the converge.
+#
+# Two helper task files hold the plumbing:
+#   tasks/expect-rejected.yml - the input must fail, with case_expect in the message
+#   tasks/expect-accepted.yml - the input must pass
+# Both run tasks/validate.yml: the argument spec, then validate-variables.yml.
+#
+# Every case records its outcome in molecule_case_results, and the report play
+# at the end fails once with the whole table. One broken rule must not hide
+# the rules behind it.
+- name: Verify the role rejects bad input
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # The four required inputs, valid; the cases below vary one thing each.
+    ispconfig_proxy_api_url: https://panel.example.test/remote/json.php
+    ispconfig_proxy_username: remote
+    ispconfig_proxy_password: secret
+    ispconfig_proxy_upstream: https://10.0.0.2/
+    good_service:
+      name: mealie.example.test
+      dns_target: 192.0.2.10
+      backend: cluster
+      external: true
+  tasks:
+    # -- Shape: the argument spec ----------------------------------------
+    - name: Reject a run without services
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: services is missing
+        case_expect: "missing required arguments: services"
+
+    - name: Reject a run without an upstream
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: ispconfig_proxy_upstream is missing
+        case_expect: "missing required arguments: ispconfig_proxy_upstream"
+        ispconfig_proxy_upstream: "{{ omit }}"
+        services:
+          - "{{ good_service }}"
+
+    - name: Reject a service without a backend
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: service has no backend
+        case_expect: "missing required arguments: backend"
+        services:
+          - name: mealie.example.test
+            dns_target: 192.0.2.10
+            external: true
+
+    - name: Reject a key the services shape does not know
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: service carries is_external (the old key)
+        case_expect: Supported parameters include
+        services:
+          - "{{ good_service | combine({'is_external': true}) }}"
+
+    - name: Reject a mode the shape does not know
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: mode is "udp"
+        case_expect: mode
+        services:
+          - "{{ good_service | combine({'mode': 'udp'}) }}"
+
+    - name: Reject an external flag that is a word
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: external is a word
+        case_expect: external
+        services:
+          - "{{ good_service | combine({'external': 'yes please'}) }}"
+
+    - name: Reject a server id that is a word
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: ispconfig_proxy_server_id is a word
+        case_expect: ispconfig_proxy_server_id
+        ispconfig_proxy_server_id: one
+        services:
+          - "{{ good_service }}"
+
+    # -- Cross-field rules: validate-variables.yml ------------------------
+    - name: Reject an API URL that is not a URL
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: ispconfig_proxy_api_url is a host name
+        case_expect: JSON endpoint of the panel
+        ispconfig_proxy_api_url: panel.example.test
+        services:
+          - "{{ good_service }}"
+
+    - name: Reject an upstream without a trailing slash
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: ispconfig_proxy_upstream has no trailing slash
+        case_expect: must end with a slash
+        ispconfig_proxy_upstream: https://10.0.0.2
+        services:
+          - "{{ good_service }}"
+
+    - name: Reject a service name that is not an FQDN
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: service name is a single label
+        case_expect: full FQDN
+        services:
+          - "{{ good_service | combine({'name': 'mealie'}) }}"
+
+    - name: Reject a service name in upper case
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: service name has upper case letters
+        case_expect: full FQDN
+        services:
+          - "{{ good_service | combine({'name': 'Mealie.example.test'}) }}"
+
+    - name: Reject two services with one name
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: two services share a name
+        case_expect: every name appears once
+        services:
+          - "{{ good_service }}"
+          - "{{ good_service | combine({'external': false}) }}"
+
+    - name: Reject an external tcp service
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: tcp service is external
+        case_expect: cannot be external
+        services:
+          - name: mqtt.example.test
+            dns_target: 192.0.2.10
+            backend: mqtt
+            mode: tcp
+            listen_port: 1883
+            external: true
+
+- name: Verify the role accepts good input
+  hosts: localhost
+  gather_facts: false
+  vars:
+    ispconfig_proxy_api_url: https://panel.example.test/remote/json.php
+    ispconfig_proxy_username: remote
+    ispconfig_proxy_password: secret
+    ispconfig_proxy_upstream: https://10.0.0.2/
+  tasks:
+    - name: Accept a list with no external service
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: no service is external
+        services:
+          - name: rancher.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+
+    - name: Accept the homelab shape
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: https services, some external, one tcp service
+        ispconfig_proxy_server_id: 1
+        ispconfig_proxy_client_id: 0
+        services:
+          - name: mealie.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+          - name: argocd.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            mode: https
+            external: true
+          - name: whoami.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: false
+          - name: mqtt.example.test
+            dns_target: 192.0.2.10
+            backend: mqtt
+            mode: tcp
+            listen_port: 1883
+
+    - name: Accept an API over plain HTTP and a multi-level name
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: http API URL, three-label service name
+        ispconfig_proxy_api_url: http://127.0.0.1:8080/remote/json.php
+        services:
+          - name: rancher.k8s.internal.example.test
+            dns_target: 192.0.2.10
+            backend: cluster
+            external: true
+
+- name: Report the results
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Show the outcome of every case
+      ansible.builtin.debug:
+        msg:
+          "{{ '%-4s  %s' | format('PASS' if item.ok | bool else 'FAIL',
+          item.name) }}"
+      loop: "{{ molecule_case_results }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert every case behaved as the contract says
+      vars:
+        failed_cases:
+          "{{ molecule_case_results | selectattr('ok', 'falsy') | list }}"
+      ansible.builtin.assert:
+        that:
+          - failed_cases | length == 0
+        fail_msg: >-
+          {{ failed_cases | length }} of {{ molecule_case_results | length }}
+          cases failed: {% for case in failed_cases %} - {{ case.name }}: {{
+          case.detail | trim }} {% endfor %}
+        success_msg: >-
+          All {{ molecule_case_results | length }} cases behaved as the contract
+          says.

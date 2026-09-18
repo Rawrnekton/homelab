@@ -1,0 +1,91 @@
+---
+# Roadwarrior scenario: a static peer, added on a re-run, relayed to the
+# other end.
+#
+# Goal: wireguard_peers, and the re-run the standard asks for. converge builds
+# the same two ends as the default scenario. side_effect then sets up a third
+# container by hand, as a laptop would be, and runs the role again with that
+# container as a static peer of the server. verify proves that the laptop
+# reaches the server AND the client, which only works when the server relays,
+# and that the client, whose config did not change, was not restarted.
+#
+# The laptop's keypair is fixed and written here, because the server's peer
+# list has to name the public key before anything runs. A throwaway key for a
+# throwaway container; never use it for anything else.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &container
+    name: wg-server
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: wireguard-molecule-roadwarrior
+    network_mode: wireguard-molecule-roadwarrior
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - wireguard
+      - server
+  - <<: *container
+    name: wg-client
+    groups:
+      - wireguard
+      - client
+  - <<: *container
+    name: wg-laptop
+    groups:
+      - laptop
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      server:
+        wireguard_address: 10.99.1.1/24
+        wireguard_listen_port: 51820
+        wireguard_ip_forward: true
+        wireguard_peer_hosts:
+          - host: wg-client
+            allowed_ips:
+              - 10.99.1.2/32
+      client:
+        wireguard_address: 10.99.1.2/24
+        wireguard_peer_hosts:
+          - host: wg-server
+            allowed_ips:
+              - 10.99.1.0/24
+            endpoint:
+              "{{ hostvars['wg-server'].ansible_default_ipv4.address }}:51820"
+            persistent_keepalive: 25
+      laptop:
+        molecule_laptop_address: 10.99.1.3/24
+        molecule_laptop_private_key: YBtyWpIuIoQwUpfEFv8SlOh9/HwUA3/QlNd3q8LswWE=
+        molecule_laptop_public_key: cLL6u3P+LYDKHnuPfCLFrJSsuc2rf3dQW/XcQ/VJsRw=
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy
