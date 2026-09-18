@@ -54,22 +54,29 @@ See `CLAUDE.md` for the rules these questions are checking against.
 ## Suggested rework order
 
 Ordered by (severity) x (how much it's actively in my way right now), not by how
-quick the fix is:
+quick the fix is. Every role below has a dated **Rework scope** block under its
+finding; a fresh session needs nothing but the role name (see "Starting a
+rework" in `CLAUDE.md`).
 
-1. **wireguard** - split now; it's the clearest single win and unblocks thinking
-   about the VPN and the reverse-proxy-vhost problem separately.
-2. **haproxy** - the var schema is the thing you specifically said fights you
-   every time you touch it; redesigning it pays off on every future service you
-   add.
+1. **wireguard** - split into `wireguard` and `ispconfig_proxy`; the shape is in
+   "Cross-role decisions".
+2. **haproxy** - the var schema is replaced by the `services` shape and named
+   pools.
 3. ~~**cluster-setup**~~ - **done.** Rebuilt as `k3s` (2026-08/09); see the
    Status table above and `roles/k3s/CLAUDE.md`.
-4. **certbot** - three independent implementations of "assemble a PEM from a
-   cert lineage" is a bug waiting for the three to drift.
-5. **longhorn** - low risk, mostly "promote hardcoded values to defaults and
-   pick one Helm-invocation style."
-6. **lvm-setup** - lowest priority; decide if this stays a narrow bootstrap
-   script (rename it to say so) or actually becomes reusable.
-7. **garage / common / dns / iscsi-client** - polish only, not blocking.
+4. **certbot** - rebuilt without Docker around the `certificates` list.
+5. **longhorn** - shrinks to `longhorn_requirements`; the Helm release moves to
+   ArgoCD as a separate task.
+6. **lvm-setup** - becomes the generic `lvm` role.
+7. **garage / common / dns** - polish, plus `dns` reading `services`.
+   ~~iscsi-client~~ is done.
+
+`haproxy`, `dns` and `ispconfig_proxy` all read the new `services` shape, and
+the first of them to be reworked moves the list to `group_vars/all` on its
+branch and deletes the old one from `group_vars/homelab`. On that branch the
+not-yet-reworked consumers read the new shape and break, which is accepted:
+nobody runs `site.yml` from a role branch except for the role under test, and
+`main` is untouched until the trunk merges.
 
 ## Cross-role decisions
 
@@ -230,6 +237,17 @@ used correctly throughout rather than as an escape hatch.
 
 ## garage — 7
 
+> **Rework scope (locked 2026-09-18).** Bring to the standard, single node only.
+> In: the binary architecture derived from `ansible_architecture`, with
+> `garage_binary_architecture` kept as an override; the download verified
+> against the published `sha256sums` of the version; `replication_factor`, zone
+> and capacity as variables; the lazy `changed_when: false` on the bucket grant
+> replaced by a read of the bucket's current permissions; buckets and keys stay
+> 1:1; `garage_state: absent` removes service, binary and config, and the data
+> and metadata directories go only with `garage_purge_data: true`. Out: a
+> multi-node layout, the admin HTTP API (the `garage json-api` CLI stays, it is
+> the one place a module does not exist).
+
 **Why:** idempotent by construction - buckets and keys are checked against
 `json-api ListBuckets`/`ListKeys` output before creating anything, which is
 exactly the "check structured state, don't assume" pattern this repo should
@@ -246,6 +264,13 @@ template rather than being a variable, which is fine as a deliberate single-node
 simplification but should be a comment saying so, not implicit.
 
 ## common — 7
+
+> **Rework scope (locked 2026-09-18).** Bring to the standard. In:
+> `common_packages` as a list; `common_passwordless_sudo` as a boolean with a
+> comment on why it is on; the `whoami` command replaced by the
+> `ansible_user_id` fact; `common_state: absent` removes the sudoers file and
+> leaves the packages. Out: everything else (timezone, unattended upgrades, SSH
+> hardening).
 
 **Why:** does exactly what it says - passwordless sudo for the SSH user, a short
 package list. Nothing to fight with because there's nothing to overdesign.
@@ -278,6 +303,20 @@ it's the role most exposed to that duplication going stale.
 
 ## longhorn — 5
 
+> **Rework scope (locked 2026-09-18).** The role shrinks to the node
+> prerequisites and is renamed `longhorn_requirements`. Longhorn itself, the
+> Helm release and the storage classes, moves to ArgoCD; that move is a separate
+> task, not part of the rework. In: `open-iscsi` with `iscsid` running and the
+> `iscsi_tcp` module loaded before it, `nfs-common`, and the multipath blacklist
+> for `^sd[a-z0-9]+` with a restart of `multipathd`. The blacklist is not a
+> late-night hack: Longhorn's knowledge base
+> (`kb/troubleshooting-volume-with-multipath`) still lists it as the fix for
+> "already mounted or mount point busy" on every version, and the install
+> preflight warns when `multipathd` runs. Keep the article as the comment. Out:
+> the Helm release, the storage classes, `kubernetes.core` on the node. Molecule
+> is short: one container, assert the packages, the module, the running daemon
+> and the blacklist.
+
 **Why it's mid-pack:** uses `kubernetes.core.helm`/`helm_repository` properly,
 which is the correct module and the one `cluster-setup` should also be using
 instead of shelling out.
@@ -291,6 +330,13 @@ uses the Helm _module_ two tasks earlier - inconsistent within a single file,
 not just across roles. One block of commented-out node-labeling code left in.
 
 ## lvm-setup — 4
+
+> **Rework scope (locked 2026-09-18).** Made generic and renamed `lvm`. In: one
+> list `lvm_volumes`, each entry with `vg`, `lv`, `size`, optional `fstype` and
+> `mountpoint`, and `resizefs`; the hardcoded `ubuntu-vg`, `100g` and
+> `/var/lib/longhorn` move into `group_vars/homelab`. Out: uninstall (a removed
+> logical volume is lost data), creating volume groups or physical volumes.
+> Molecule: loop devices in a privileged container for the volume group.
 
 **Why it's this low:** it works, but it's really two unrelated one-off steps
 ("grow the root LV," "carve out and mount a Longhorn LV") glued under a generic
