@@ -1,0 +1,57 @@
+---
+# Render templates/config.yaml.j2 with the vars the caller set on the include,
+# and check what came out.
+#
+# Caller contract:
+#   case_name     - human name of the case, used in the report
+#   case_contains - substrings that must appear in the rendered file
+#   case_absent   - substrings that must NOT appear in it
+#   case_keys     - key/value pairs the parsed YAML must hold
+#   plus the k3s_* vars under test
+#
+# Same tally mechanism as expect-rejected.yml: no case fails the play on its
+# own, and the report play at the end fails once with the whole table.
+- name: "Case: {{ case_name }}"
+  block:
+    - name: "Parse the pass-through arguments: {{ case_name }}"
+      ansible.builtin.include_role:
+        name: k3s
+        tasks_from: parse-extra-args.yml
+
+    - name: "Render the configuration: {{ case_name }}"
+      ansible.builtin.set_fact:
+        rendered_config: "{{ lookup('ansible.builtin.template', k3s_config_template) }}"
+
+    - name: "Check the rendered configuration: {{ case_name }}"
+      vars:
+        parsed: "{{ rendered_config | from_yaml | default({}, true) }}"
+      ansible.builtin.assert:
+        that:
+          # Every wanted substring is there ...
+          - case_contains | default([]) | reject('in', rendered_config) | list | length == 0
+          # ... no unwanted one is ...
+          - case_absent | default([]) | select('in', rendered_config) | list | length == 0
+          # ... and the parsed YAML already holds every wanted key, so adding
+          # them changes nothing.
+          - parsed | combine(case_keys | default({})) == parsed
+
+    - name: "Record that the configuration is right: {{ case_name }}"
+      ansible.builtin.set_fact:
+        case_outcome:
+          name: "{{ case_name }}"
+          ok: true
+          detail: rendered as expected
+  rescue:
+    - name: "Record the rendering failure: {{ case_name }}"
+      ansible.builtin.set_fact:
+        case_outcome:
+          name: "{{ case_name }}"
+          ok: false
+          detail: >-
+            {{ ansible_failed_result.msg | default('(no message)') | trim }}
+            -- rendered config was:
+            {{ rendered_config | default('(rendering itself failed)') | trim }}
+  always:
+    - name: "Add the outcome to the tally: {{ case_name }}"
+      ansible.builtin.set_fact:
+        molecule_case_results: "{{ molecule_case_results | default([]) + [case_outcome] }}"

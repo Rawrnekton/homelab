@@ -1,0 +1,83 @@
+---
+# Cluster scenario: three control-plane nodes and two workers.
+#
+# Goal: the full topology, the shape the homelab actually runs. It is the only
+# scenario that exercises server-join and agent-join against the same cluster
+# at the same time, on role defaults for everything else.
+#
+# Five k3s nodes (three of them etcd members) in Docker is the heaviest
+# scenario in the suite. The lighter halves live in `ha` (control plane only)
+# and `workers` (one server, two agents); run those first when a change breaks
+# something here.
+#
+# This used to run real VMs through Multipass on the delegated driver. Docker
+# keeps it in the same tool as every other scenario, with no extra host
+# dependency, at the cost of some fidelity (see the k3s_snapshotter override
+# below, and the missing kernel isolation between "nodes").
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &node
+    name: k3s-bootstrap
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: k3s-molecule-cluster
+    network_mode: k3s-molecule-cluster
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - control
+  - <<: *node
+    name: k3s-control2
+    groups:
+      - control
+  - <<: *node
+    name: k3s-control3
+    groups:
+      - control
+  - <<: *node
+    name: k3s-worker1
+    groups:
+      - worker
+  - <<: *node
+    name: k3s-worker2
+    groups:
+      - worker
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      all:
+        # overlayfs does not work nested inside Docker.
+        k3s_snapshotter: native
+      control:
+        k3s_node_role: control
+      worker:
+        k3s_node_role: worker
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy

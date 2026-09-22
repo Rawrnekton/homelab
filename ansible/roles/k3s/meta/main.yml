@@ -1,0 +1,19 @@
+---
+galaxy_info:
+  author: Jonathan Gerdes
+  description: provision a bare k3s cluster
+  license: MIT
+  min_ansible_version: 2.21.2
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - 24.04
+
+  galaxy_tags:
+    - k3s
+    - kubernetes
+    - cluster
+    - homelab
+
+dependencies: []

@@ -1,0 +1,72 @@
+---
+# Add-node scenario: grow a running cluster.
+#
+# Goal: "re-run joins new inventory members without touching existing nodes".
+#
+# The three containers are created up front, but the converge only runs the
+# role on the `initial` group. side_effect.yml then runs it on every host, so
+# k3s-worker2 joins a cluster that is already up. The verify playbook checks
+# both halves of the promise: the new node joined, and the services on the old
+# nodes were never restarted.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  - &node
+    name: k3s-bootstrap
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /usr/lib/systemd/systemd
+    networks:
+      - name: k3s-molecule-add-node
+    network_mode: k3s-molecule-add-node
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - control
+      - initial
+  - <<: *node
+    name: k3s-worker1
+    groups:
+      - worker
+      - initial
+  - <<: *node
+    name: k3s-worker2
+    groups:
+      - worker
+      - added
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+  inventory:
+    group_vars:
+      all:
+        # overlayfs does not work nested inside Docker.
+        k3s_snapshotter: native
+      control:
+        k3s_node_role: control
+      worker:
+        k3s_node_role: worker
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy

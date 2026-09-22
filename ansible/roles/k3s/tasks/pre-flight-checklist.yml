@@ -1,0 +1,73 @@
+---
+- name: At least one control plane node must exist
+  ansible.builtin.assert:
+    that:
+      - ansible_play_hosts
+        | map('extract', hostvars)
+        | selectattr('k3s_node_role', 'equalto', 'control')
+        | list | length > 0
+    fail_msg: >-
+      No host in the play has k3s_node_role set to 'control'.
+      At least one control plane node is required.
+  run_once: true
+
+- name: Identify first control plane node
+  ansible.builtin.set_fact:
+    k3s_first_control_node: >-
+      {{ ansible_play_hosts
+         | map('extract', hostvars)
+         | selectattr('k3s_node_role', 'equalto', 'control')
+         | map(attribute='inventory_hostname')
+         | first }}
+  run_once: true
+
+- name: Gather all currently running services
+  ansible.builtin.service_facts:
+
+- name: Gather if K3s server is already running
+  ansible.builtin.set_fact:
+    k3s_server_already_running: >-
+      {{ 'k3s.service' in ansible_facts.services
+         and ansible_facts.services['k3s.service'].state == 'running' }}
+
+- name: Gather if K3s agent is already running
+  ansible.builtin.set_fact:
+    k3s_agent_already_running: >-
+      {{ 'k3s-agent.service' in ansible_facts.services
+         and ansible_facts.services['k3s-agent.service'].state == 'running' }}
+
+- name: Note whether k3s already runs in the role this node plays
+  ansible.builtin.set_fact:
+    k3s_already_running: >-
+      {{ k3s_server_already_running if k3s_node_role == 'control'
+         else k3s_agent_already_running }}
+
+- name: Fail if k3s runs on some nodes but not on the first control node
+  ansible.builtin.assert:
+    that:
+      - >-
+        hostvars[k3s_first_control_node].k3s_server_already_running | bool
+        or
+        not (
+          ansible_play_hosts
+          | map('extract', hostvars)
+          | rejectattr('inventory_hostname', 'equalto', k3s_first_control_node)
+          | selectattr('k3s_server_already_running', 'truthy')
+          | list | length > 0
+          or
+          ansible_play_hosts
+          | map('extract', hostvars)
+          | rejectattr('inventory_hostname', 'equalto', k3s_first_control_node)
+          | selectattr('k3s_agent_already_running', 'truthy')
+          | list | length > 0
+        )
+    fail_msg: >-
+      K3s was already found in a running state on some of the nodes but not on the first supplied control node.
+      This is potentially dangerous as the first control node found by this ansible role is designated
+      as bootstrap node. Trying to now bootstrap from this state with this node will probably hit a lot
+      of weird edgecases and potentially lead to dataloss.
+      Continuing is therefore not supported.
+      If that was intentional (e.g. you wanted the first control node to join the cluster) please move it
+      lower in the inventory.
+      If you want to start fresh, uninstall k3s on all nodes first (k3s_state: absent).
+  run_once: true

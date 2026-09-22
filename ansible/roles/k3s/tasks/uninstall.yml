@@ -1,0 +1,27 @@
+---
+# Take k3s off this node (k3s_state: absent).
+#
+# The install script writes an uninstall script next to the binary, one for a
+# server and a different one for an agent. Those scripts know every path k3s
+# owns, so the role calls them instead of removing files itself. They also
+# remove themselves, which is what makes a second run a no-op.
+- name: Look for the k3s uninstall scripts
+  ansible.builtin.stat:
+    path: "/usr/local/bin/{{ item }}"
+  register: k3s_uninstall_scripts
+  loop:
+    - k3s-uninstall.sh
+    - k3s-agent-uninstall.sh
+
+- name: Run the k3s uninstall scripts
+  ansible.builtin.command:
+    cmd: "{{ item.stat.path }}"
+  loop: "{{ k3s_uninstall_scripts.results | selectattr('stat.exists') | list }}"
+  loop_control:
+    label: "{{ item.item }}"
+  changed_when: true
+
+- name: Remove the downloaded install script
+  ansible.builtin.file:
+    path: "{{ k3s_install_script }}"
+    state: absent

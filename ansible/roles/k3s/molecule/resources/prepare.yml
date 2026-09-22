@@ -1,0 +1,24 @@
+---
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    # Docker's embedded DNS answers with AAAA records, but a container on a
+    # user-defined bridge network has no IPv6 route. apt then sits on a dead
+    # connection until it times out, which stalls the prepare step of every
+    # multi-node scenario for many minutes. Forcing IPv4 is the whole fix.
+    - name: Make apt use IPv4
+      ansible.builtin.copy:
+        content: 'Acquire::ForceIPv4 "true";'
+        dest: /etc/apt/apt.conf.d/99-molecule-force-ipv4
+        mode: "0644"
+
+    - name: Install packages needed to run and inspect k3s inside Docker
+      ansible.builtin.apt:
+        name:
+          - curl
+          - iptables
+          # x509_certificate_info in the verify playbooks needs this.
+          - python3-cryptography
+        state: present
+        update_cache: true
