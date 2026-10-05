@@ -1,0 +1,25 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yopass
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      containers:
+        - name: yopass
+          image: yopass
+          args:
+            - --memcached=localhost:11211
+          ports:
+            - containerPort: 1337
+        - name: memcached
+          image: memcached
+          args:
+            - -m
+            - "64"
+          ports:
+            - containerPort: 11211

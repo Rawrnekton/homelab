@@ -26,6 +26,7 @@ haproxy_https_backends:
       - zigbee2mqtt
       - copperforge
       - vorleser
+      - yopass
 
   - name: garage
     servers:
