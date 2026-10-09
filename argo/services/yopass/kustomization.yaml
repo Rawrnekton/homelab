@@ -17,6 +17,6 @@ resources:
 images:
 - name: yopass
   newName: jhaals/yopass
-  newTag: 14.10.0
+  newTag: 15.0.0
 - name: memcached
   newTag: 1.6.45-alpine
