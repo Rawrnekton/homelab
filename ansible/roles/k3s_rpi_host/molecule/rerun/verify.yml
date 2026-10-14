@@ -1,0 +1,44 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars:
+    stock_cmdline:
+      "{{ lookup('ansible.builtin.file', '../resources/files/cmdline.txt') }}"
+    stock_config:
+      "{{ lookup('ansible.builtin.file', '../resources/files/config.txt',
+      rstrip=false) }}"
+  tasks:
+    - name: Read the boot files
+      ansible.builtin.slurp:
+        src: "/boot/firmware/{{ item }}"
+      register: boot_files
+      loop:
+        - cmdline.txt
+        - config.txt
+
+    - name: The cmdline.txt got the new parameter once, and nothing twice
+      vars:
+        cmdline: "{{ boot_files.results[0].content | b64decode }}"
+        expected: >-
+          {{ stock_cmdline }} cgroup_enable=memory cgroup_memory=1
+          systemd.unified_cgroup_hierarchy=1
+      ansible.builtin.assert:
+        that:
+          - cmdline == expected ~ '\n'
+          - cmdline.split() | unique | length == cmdline.split() | length
+        fail_msg: "cmdline.txt: {{ cmdline }}"
+
+    - name: The config.txt has one block, with the new list
+      vars:
+        config: "{{ boot_files.results[1].content | b64decode }}"
+        expected_block: |
+          # BEGIN ANSIBLE MANAGED BLOCK k3s_rpi_host
+          [all]
+          kernel=kernel8.img
+          dtparam=pciex1_gen=3
+          # END ANSIBLE MANAGED BLOCK k3s_rpi_host
+      ansible.builtin.assert:
+        that:
+          - config == stock_config ~ expected_block
+        fail_msg: "config.txt: {{ config }}"

@@ -1,0 +1,21 @@
+---
+# A container has no boot partition. Put the boot files of argus (Raspberry Pi
+# OS trixie on a Pi 5, copied on 2026-10-14) where the role expects them.
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Create the boot directory
+      ansible.builtin.file:
+        path: /boot/firmware
+        state: directory
+        mode: "0755"
+
+    - name: Copy the stock boot files of argus
+      ansible.builtin.copy:
+        src: "files/{{ item }}"
+        dest: "/boot/firmware/{{ item }}"
+        mode: "0755"
+      loop:
+        - cmdline.txt
+        - config.txt

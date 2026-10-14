@@ -20,5 +20,8 @@ argus
 [monitoring]
 argus
 
+[k3s_rpi_host]
+argus
+
 [vps]
 naglfar

@@ -33,3 +33,9 @@
     - { role: lvm-setup, tags: [lvm] }
     - { role: cluster-setup, tags: [cluster] }
     - { role: longhorn, tags: [longhorn] }
+
+- name: Prepare the boot of the Raspberry Pis that run k3s
+  hosts: k3s_rpi_host
+  become: true
+  roles:
+    - { role: k3s_rpi_host, tags: [k3s_rpi_host] }

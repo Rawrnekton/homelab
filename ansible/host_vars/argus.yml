@@ -1,0 +1,10 @@
+---
+# k3s needs the memory cgroup, and the firmware of the Pi 5 disables it in
+# front of cmdline.txt (cgroup_disable=memory); a later cgroup_enable wins.
+k3s_rpi_host_cmdline_params:
+  - cgroup_enable=memory
+  - cgroup_memory=1
+# The default kernel of the Pi 5 (kernel_2712.img) uses 16K pages, and
+# cilium-envoy (tcmalloc) crashes on them. kernel8.img uses 4K pages.
+k3s_rpi_host_config_lines:
+  - kernel=kernel8.img

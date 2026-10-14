@@ -1,0 +1,19 @@
+---
+galaxy_info:
+  author: Jonathan Gerdes
+  description: prepare the boot configuration of a Raspberry Pi that runs k3s
+  license: MIT
+  min_ansible_version: 2.21.2
+
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+
+  galaxy_tags:
+    - raspberrypi
+    - boot
+    - k3s
+    - homelab
+
+dependencies: []
