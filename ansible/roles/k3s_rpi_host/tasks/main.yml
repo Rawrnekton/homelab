@@ -1,0 +1,100 @@
+---
+- name: Validate variables
+  ansible.builtin.import_tasks: validate-variables.yml
+
+# Raspberry Pi OS moved the boot partition from /boot to /boot/firmware with
+# bookworm. An older image, or a host that is not a Pi, stops here.
+- name: Find the boot files
+  ansible.builtin.stat:
+    path: "/boot/firmware/{{ item }}"
+  register: k3s_rpi_host_files
+  loop:
+    - cmdline.txt
+    - config.txt
+
+- name: Validate the boot files exist
+  vars:
+    missing_files: >-
+      {{ k3s_rpi_host_files.results | rejectattr('stat.exists') |
+      map(attribute='item') | list }}
+  ansible.builtin.assert:
+    that:
+      - missing_files | length == 0
+    fail_msg: >-
+      {{ missing_files }} not found in /boot/firmware. The role supports
+      Raspberry Pi OS bookworm or later, where the boot partition is mounted
+      there.
+
+- name: Read cmdline.txt
+  ansible.builtin.slurp:
+    src: /boot/firmware/cmdline.txt
+  register: k3s_rpi_host_cmdline_file
+
+# The firmware reads the first line only. A file with a second line was
+# changed by hand, and the role does not guess which line counts.
+- name: Validate cmdline.txt is one line
+  vars:
+    cmdline: "{{ k3s_rpi_host_cmdline_file.content | b64decode | trim }}"
+  ansible.builtin.assert:
+    that:
+      - cmdline | length > 0
+      - "'\n' not in cmdline"
+    fail_msg: >-
+      /boot/firmware/cmdline.txt must hold exactly one non-empty line. Fix it by
+      hand before the role edits it. Content: {{ cmdline }}
+
+# Rewrite the whole file instead of lineinfile: a lineinfile that misses its
+# regexp appends a second line, and the Pi does not boot from that.
+# No mode: the file exists (checked above), so copy keeps its mode, and
+# /boot/firmware is vfat, where a chmod can fail.
+- name: Add the missing kernel parameters to cmdline.txt
+  vars:
+    cmdline: "{{ k3s_rpi_host_cmdline_file.content | b64decode | trim }}"
+    missing_params: >-
+      {{ k3s_rpi_host_cmdline_params | reject('in', cmdline.split()) | list }}
+  ansible.builtin.copy: # noqa: risky-file-permissions
+    content: "{{ ([cmdline] + missing_params) | join(' ') }}\n"
+    dest: /boot/firmware/cmdline.txt
+  when: missing_params | length > 0
+  notify: Reboot to apply the boot configuration
+
+# An empty block makes blockinfile remove the block and its markers.
+- name: Set the lines in config.txt
+  ansible.builtin.blockinfile:
+    path: /boot/firmware/config.txt
+    marker: "# {mark} ANSIBLE MANAGED BLOCK k3s_rpi_host"
+    # Double quotes, so that \n is a newline before Jinja sees it.
+    block:
+      "{{ (['[all]'] + k3s_rpi_host_config_lines) | join('\n') if
+      k3s_rpi_host_config_lines | length > 0 else '' }}"
+    insertafter: EOF
+  notify: Reboot to apply the boot configuration
+
+- name: Apply the boot configuration now
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the command line of the running kernel
+  ansible.builtin.slurp:
+    src: /proc/cmdline
+  register: k3s_rpi_host_proc_cmdline
+  when:
+    - k3s_rpi_host_reboot
+    - not ansible_check_mode
+
+# The effect, not the file: the firmware puts its own parameters in front of
+# cmdline.txt, so this is where a parameter is seen to reach the kernel.
+- name: Validate the running kernel got every parameter
+  vars:
+    running_params:
+      "{{ k3s_rpi_host_proc_cmdline.content | b64decode | split }}"
+    absent_params: >-
+      {{ k3s_rpi_host_cmdline_params | reject('in', running_params) | list }}
+  ansible.builtin.assert:
+    that:
+      - absent_params | length == 0
+    fail_msg: >-
+      {{ absent_params }} are in /boot/firmware/cmdline.txt but not in
+      /proc/cmdline. The host did not boot with the current file; reboot it.
+  when:
+    - k3s_rpi_host_reboot
+    - not ansible_check_mode

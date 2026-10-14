@@ -1,0 +1,61 @@
+---
+# Rules that meta/argument_specs.yml cannot express. Most type errors are
+# already rejected by the argument spec before this file runs.
+
+# The argument spec accepts a string for a list (it splits it at commas for
+# the check) but leaves the variable a string, and the tasks would then loop
+# over its characters.
+- name: Validate k3s_rpi_host_cmdline_params is a list
+  ansible.builtin.assert:
+    that:
+      - k3s_rpi_host_cmdline_params is sequence
+      - k3s_rpi_host_cmdline_params is not string
+    fail_msg: >-
+      k3s_rpi_host_cmdline_params must be a list, one parameter per item. Got:
+      {{ k3s_rpi_host_cmdline_params }}
+
+- name: Validate k3s_rpi_host_config_lines is a list
+  ansible.builtin.assert:
+    that:
+      - k3s_rpi_host_config_lines is sequence
+      - k3s_rpi_host_config_lines is not string
+    fail_msg: >-
+      k3s_rpi_host_config_lines must be a list, one line per item. Got: {{
+      k3s_rpi_host_config_lines }}
+
+- name: Validate the kernel parameters are single tokens
+  vars:
+    bad_params:
+      "{{ k3s_rpi_host_cmdline_params | reject('match', '^\\S+$') | list }}"
+  ansible.builtin.assert:
+    that:
+      - bad_params | length == 0
+    fail_msg: >-
+      A kernel parameter must be one token: not empty and without spaces. Bad
+      parameters: {{ bad_params }}
+
+# The role appends the missing parameters as a set. A duplicate in the list
+# would be appended twice on the first run and never on the next.
+- name: Validate the kernel parameters are unique
+  ansible.builtin.assert:
+    that:
+      - k3s_rpi_host_cmdline_params | unique | length ==
+        k3s_rpi_host_cmdline_params | length
+    fail_msg: >-
+      Every kernel parameter may appear once in k3s_rpi_host_cmdline_params.
+      Got: {{ k3s_rpi_host_cmdline_params }}
+
+# A section filter inside the block would change which models read the lines
+# after it. The block opens with [all] itself; anything narrower is out of
+# scope.
+- name: Validate the config.txt lines are single lines and not section filters
+  vars:
+    bad_lines: >-
+      {{ k3s_rpi_host_config_lines | reject('match', '^[^\[\s][^\n\r]*$') | list
+      }}
+  ansible.builtin.assert:
+    that:
+      - bad_lines | length == 0
+    fail_msg: >-
+      A config.txt line must be one non-empty line that does not start with
+      whitespace or with '[' (a section filter). Bad lines: {{ bad_lines }}

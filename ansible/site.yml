@@ -34,6 +34,12 @@
     - { role: cluster-setup, tags: [cluster] }
     - { role: longhorn_requirements, tags: [longhorn_requirements] }
 
+- name: Prepare the boot of the Raspberry Pis that run k3s
+  hosts: k3s_rpi_host
+  become: true
+  roles:
+    - { role: k3s_rpi_host, tags: [k3s_rpi_host] }
+
 - name: Prepare the storage of the monitoring host
   hosts: monitoring
   become: true

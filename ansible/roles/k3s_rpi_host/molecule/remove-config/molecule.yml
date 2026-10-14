@@ -1,0 +1,49 @@
+---
+# Remove-config scenario: the config.txt lines are taken out again.
+#
+# Goal: an empty k3s_rpi_host_config_lines removes the block and its markers, so
+# config.txt is the stock file again, byte for byte. side_effect.yml runs the
+# role twice with the empty list: the second run must find nothing to remove.
+# cmdline.txt keeps its parameters; removing them is out of scope.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  # No systemd and no privileges: the role edits two files and nothing else.
+  # The reboot cannot run in a container; every scenario switches it off.
+  - name: k3s-rpi-host-remove-config
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    command: sleep infinity
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      all:
+        k3s_rpi_host_cmdline_params:
+          - cgroup_enable=memory
+          - cgroup_memory=1
+        k3s_rpi_host_config_lines:
+          - kernel=kernel8.img
+        k3s_rpi_host_reboot: false
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy

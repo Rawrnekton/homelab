@@ -1,0 +1,5 @@
+---
+# Descriptions live in meta/argument_specs.yml.
+k3s_rpi_host_cmdline_params: []
+k3s_rpi_host_config_lines: []
+k3s_rpi_host_reboot: true

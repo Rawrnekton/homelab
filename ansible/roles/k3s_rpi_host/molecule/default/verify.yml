@@ -1,0 +1,42 @@
+---
+# The files are the effect here: the firmware reads them at boot, and a
+# container cannot boot a Pi. The real boot is checked by the role itself on
+# the host (/proc/cmdline after the reboot).
+- name: Verify
+  hosts: all
+  become: true
+  vars:
+    stock_cmdline:
+      "{{ lookup('ansible.builtin.file', '../resources/files/cmdline.txt') }}"
+    stock_config:
+      "{{ lookup('ansible.builtin.file', '../resources/files/config.txt',
+      rstrip=false) }}"
+  tasks:
+    - name: Read the boot files
+      ansible.builtin.slurp:
+        src: "/boot/firmware/{{ item }}"
+      register: boot_files
+      loop:
+        - cmdline.txt
+        - config.txt
+
+    - name: The cmdline.txt is the stock line with the two parameters appended
+      vars:
+        cmdline: "{{ boot_files.results[0].content | b64decode }}"
+      ansible.builtin.assert:
+        that:
+          - cmdline == stock_cmdline ~ ' cgroup_enable=memory cgroup_memory=1\n'
+        fail_msg: "cmdline.txt: {{ cmdline }}"
+
+    - name: The config.txt is the stock file with the block at its end
+      vars:
+        config: "{{ boot_files.results[1].content | b64decode }}"
+        expected_block: |
+          # BEGIN ANSIBLE MANAGED BLOCK k3s_rpi_host
+          [all]
+          kernel=kernel8.img
+          # END ANSIBLE MANAGED BLOCK k3s_rpi_host
+      ansible.builtin.assert:
+        that:
+          - config == stock_config ~ expected_block
+        fail_msg: "config.txt: {{ config }}"

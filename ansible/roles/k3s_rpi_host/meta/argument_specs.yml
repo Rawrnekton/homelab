@@ -1,0 +1,59 @@
+---
+# Role argument specification — the schema/contract for this role's variables.
+#
+# Validated automatically before any task in `main` runs (fail fast on bad
+# input), and rendered as documentation by `ansible-doc -t role ... k3s_rpi_host`.
+#
+# Prose descriptions live HERE (single source of truth); defaults/main.yml
+# holds the actual values only.
+argument_specs:
+  main:
+    short_description:
+      Prepare the boot configuration of a Raspberry Pi that runs k3s.
+    description:
+      - Only for Raspberry Pis that run k3s. Apply it to the inventory group
+        C(k3s_rpi_host), never to all Raspberry Pis.
+      - Adds kernel parameters to C(/boot/firmware/cmdline.txt) and writes lines
+        into a managed block at the end of C(/boot/firmware/config.txt). Reboots
+        the host when one of the two files changed, then checks that the running
+        kernel got every parameter.
+      - The role only adds kernel parameters. It never removes one, because it
+        cannot tell a parameter it added from one the image shipped with.
+    author:
+      - Jonathan Gerdes
+    options:
+      k3s_rpi_host_cmdline_params:
+        type: list
+        elements: str
+        required: false
+        default: []
+        description:
+          - Kernel parameters that must be in C(cmdline.txt), for example
+            C(cgroup_enable=memory).
+          - A parameter that is already in the file, as the same exact token, is
+            not added again. A missing one is appended to the end of the line,
+            in list order. For most kernel parameters the last one wins.
+          - Removing a parameter from this list does not remove it from the
+            file.
+      k3s_rpi_host_config_lines:
+        type: list
+        elements: str
+        required: false
+        default: []
+        description:
+          - Lines for C(config.txt), for example C(kernel=kernel8.img).
+          - They go into one managed block at the end of the file, under an
+            C([all]) section filter, so they apply to every Pi model and
+            override earlier settings of the same name.
+          - The block holds exactly this list. A line taken out of the list
+            leaves the file; an empty list removes the block.
+      k3s_rpi_host_reboot:
+        type: bool
+        required: false
+        default: true
+        description:
+          - Reboot the host when C(cmdline.txt) or C(config.txt) changed, then
+            check that C(/proc/cmdline) holds every parameter of
+            C(k3s_rpi_host_cmdline_params).
+          - With C(false) the role only edits the files. The change takes effect
+            at the next boot, and the check is skipped.
