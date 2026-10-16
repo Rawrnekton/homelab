@@ -1,0 +1,13 @@
+---
+# All scenarios use this file through a symlink.
+#
+# The create and destroy playbooks of the docker driver
+# (molecule_plugins.docker) need community.docker. The role uses
+# community.general (lvg, lvol, filesystem) and ansible.posix (mount).
+collections:
+  - name: community.docker
+    version: ">=3.10.2"
+  - name: community.general
+    version: ">=10.0.0"
+  - name: ansible.posix
+    version: ">=1.5.0"

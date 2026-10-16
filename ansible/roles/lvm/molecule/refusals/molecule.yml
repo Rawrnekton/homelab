@@ -1,0 +1,47 @@
+---
+# Refusals scenario: the inputs that the role must refuse on a host that it set
+# up before, because they cause a loss of data.
+#
+# A smaller size does not shrink the volume. A mountpoint with content does not
+# get a mount over it, and it does not get a new volume. Both runs fail, and the
+# host does not change. side_effect.yml gives the bad inputs and makes sure that
+# each one fails. verify.yml makes sure that nothing changed.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  # The container is privileged, because it needs loop devices, device-mapper
+  # and mount. It has no systemd, because the role starts no service. For the
+  # safety of the host, see ../resources/prepare.yml.
+  - name: lvm-refusals
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    command: sleep infinity
+    privileged: true
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+    cleanup: ../resources/cleanup.yml
+  inventory:
+    group_vars:
+      all:
+        molecule_disk_count: 1
+        molecule_disk_size: 400M
+        lvm_volume_groups:
+          - vg: molecule_data
+            devices:
+              - /dev/molecule-disk0
+        lvm_volumes:
+          - vg: molecule_data
+            lv: data
+            size: 100m
+            fstype: ext4
+            mountpoint: /srv/data
+verifier:
+  name: ansible

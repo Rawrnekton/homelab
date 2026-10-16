@@ -30,6 +30,12 @@
   hosts: argo
   become: true
   roles:
-    - { role: lvm-setup, tags: [lvm] }
+    - { role: lvm, tags: [lvm] }
     - { role: cluster-setup, tags: [cluster] }
     - { role: longhorn, tags: [longhorn] }
+
+- name: Prepare the storage of the monitoring host
+  hosts: monitoring
+  become: true
+  roles:
+    - { role: lvm, tags: [lvm] }

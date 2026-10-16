@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  author: Jonathan Gerdes
+  description: create and grow LVM volume groups and logical volumes
+  license: MIT
+  min_ansible_version: 2.21.2
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+    - name: Debian
+      versions:
+        - trixie
+
+  galaxy_tags:
+    - lvm
+    - storage
+    - homelab
+
+dependencies: []

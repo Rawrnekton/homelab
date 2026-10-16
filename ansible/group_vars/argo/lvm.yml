@@ -1,0 +1,20 @@
+---
+# The disk layout of argo-1..3 as it is on the hosts (checked 2026-10-16 on all
+# three nodes). The values must stay the same as the state of the hosts, so that
+# a run of the role changes nothing.
+lvm_volume_groups:
+  - vg: ubuntu-vg
+    devices:
+      - /dev/nvme0n1p3
+
+lvm_volumes:
+  # The root filesystem. No mountpoint, because the installer wrote its fstab
+  # line.
+  - vg: ubuntu-vg
+    lv: ubuntu-lv
+    size: 50g
+  - vg: ubuntu-vg
+    lv: longhorn-lv
+    size: 100g
+    fstype: ext4
+    mountpoint: /var/lib/longhorn

@@ -1,0 +1,310 @@
+---
+# Converge: the controller checks the input contract.
+#
+# This scenario has no verify playbook. A rejected input must cause its play to
+# fail, thus the assertions are in the converge.
+#
+# Two helper task files do the work:
+#   tasks/expect-rejected.yml - the input must fail, with case_expect in the message
+#   tasks/expect-accepted.yml - the input must pass
+# Both run tasks/validate.yml: first the argument spec, then
+# validate-variables.yml.
+#
+# Each case records its result in molecule_case_results. At the end, the report
+# play fails one time and shows the full table. Thus one broken rule does not
+# hide the subsequent rules.
+- name: Verify the role rejects bad input
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    # -- Shape: the argument spec ------------------------------------------
+    - name: Reject lvm_volumes is a string
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: lvm_volumes is a string
+        case_expect: "option 'lvm_volumes' is of type str"
+        lvm_volumes: data/one
+
+    - name: Reject lvm_volume_groups is a string
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: lvm_volume_groups is a string
+        case_expect: "option 'lvm_volume_groups' is of type str"
+        lvm_volume_groups: data
+
+    - name: Reject volume without size
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: volume without size
+        case_expect: "size"
+        lvm_volumes:
+          - vg: data
+            lv: one
+
+    - name: Reject volume group without devices
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: volume group without devices
+        case_expect: "devices"
+        lvm_volume_groups:
+          - vg: data
+
+    - name: Reject fstype is xfs
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: fstype is xfs
+        case_expect: "fstype"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 10g
+            fstype: xfs
+
+    - name: Reject resizefs is a word
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: resizefs is a word
+        case_expect: "resizefs"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 10g
+            resizefs: later
+
+    # -- Rules: validate-variables.yml -------------------------------------
+    - name: Reject devices is a string
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: devices is a string
+        case_expect: "must be a list, one device per item"
+        lvm_volume_groups:
+          - vg: data
+            devices: /dev/sdb
+
+    - name: Reject volume group name starts with a dash
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: volume group name starts with a dash
+        case_expect: "may hold only letters"
+        lvm_volume_groups:
+          - vg: -data
+            devices:
+              - /dev/sdb
+
+    - name: Reject logical volume name with a slash
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: logical volume name with a slash
+        case_expect: "may hold only letters"
+        lvm_volumes:
+          - vg: data
+            lv: a/b
+            size: 10g
+
+    - name: Reject same volume group twice
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: same volume group twice
+        case_expect: "may appear once in lvm_volume_groups"
+        lvm_volume_groups:
+          - vg: data
+            devices:
+              - /dev/sdb
+          - vg: data
+            devices:
+              - /dev/sdc
+
+    - name: Reject volume group with no device
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: volume group with no device
+        case_expect: "at least one device"
+        lvm_volume_groups:
+          - vg: data
+            devices: []
+
+    - name: Reject relative device
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: relative device
+        case_expect: "absolute path"
+        lvm_volume_groups:
+          - vg: data
+            devices:
+              - sdb
+
+    - name: Reject device in two groups
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: device in two groups
+        case_expect: "Every device may appear once"
+        lvm_volume_groups:
+          - vg: a
+            devices:
+              - /dev/sdb
+          - vg: b
+            devices:
+              - /dev/sdb
+
+    - name: Reject size without a unit
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: size without a unit
+        case_expect: "number with one unit"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: "100"
+
+    - name: Reject relative size
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: relative size
+        case_expect: "number with one unit"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: +10g
+
+    - name: Reject percentage size
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: percentage size
+        case_expect: "number with one unit"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 50%FREE
+
+    - name: Reject same logical volume twice
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: same logical volume twice
+        case_expect: "may appear once in lvm_volumes"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 10g
+          - vg: data
+            lv: one
+            size: 20g
+
+    - name: Reject mountpoint without fstype
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: mountpoint without fstype
+        case_expect: "needs fstype"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 10g
+            mountpoint: /srv
+
+    - name: Reject mountpoint is root
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: mountpoint is root
+        case_expect: "not '/'"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 10g
+            fstype: ext4
+            mountpoint: /
+
+    - name: Reject relative mountpoint
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: relative mountpoint
+        case_expect: "absolute path without spaces"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 10g
+            fstype: ext4
+            mountpoint: srv/data
+
+    - name: Reject same mountpoint twice
+      ansible.builtin.include_tasks: tasks/expect-rejected.yml
+      vars:
+        case_name: same mountpoint twice
+        case_expect: "used once"
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 10g
+            fstype: ext4
+            mountpoint: /srv
+          - vg: data
+            lv: two
+            size: 10g
+            fstype: ext4
+            mountpoint: /srv
+
+    # -- Valid shapes ------------------------------------------------------
+    - name: Accept role defaults
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: role defaults
+
+    - name: Accept the argo values
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: the argo values from the inventory
+        inventory_values:
+          "{{ lookup('ansible.builtin.file', playbook_dir ~
+          '/../../../../group_vars/argo/lvm.yml') | from_yaml }}"
+        lvm_volume_groups: "{{ inventory_values.lvm_volume_groups }}"
+        lvm_volumes: "{{ inventory_values.lvm_volumes }}"
+
+    - name: Accept the argus values
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: the argus values from the inventory
+        inventory_values:
+          "{{ lookup('ansible.builtin.file', playbook_dir ~
+          '/../../../../host_vars/argus/lvm.yml') | from_yaml }}"
+        lvm_volume_groups: "{{ inventory_values.lvm_volume_groups }}"
+        lvm_volumes: "{{ inventory_values.lvm_volumes }}"
+
+    - name: Accept volume without filesystem, decimal size, no resize
+      ansible.builtin.include_tasks: tasks/expect-accepted.yml
+      vars:
+        case_name: volume without filesystem, decimal size, no resize
+        lvm_volume_groups:
+          - vg: data
+            devices:
+              - /dev/sdb
+        lvm_volumes:
+          - vg: data
+            lv: one
+            size: 1.5t
+            resizefs: false
+
+- name: Report the results
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Show the outcome of every case
+      ansible.builtin.debug:
+        msg:
+          "{{ '%-4s  %s' | format('PASS' if item.ok | bool else 'FAIL',
+          item.name) }}"
+      loop: "{{ molecule_case_results }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert every case behaved as the contract says
+      vars:
+        failed_cases:
+          "{{ molecule_case_results | selectattr('ok', 'falsy') | list }}"
+      ansible.builtin.assert:
+        that:
+          - failed_cases | length == 0
+        fail_msg: >-
+          {{ failed_cases | length }} of {{ molecule_case_results | length }}
+          cases failed: {% for case in failed_cases %} - {{ case.name }}: {{
+          case.detail | trim }} {% endfor %}
+        success_msg: >-
+          All {{ molecule_case_results | length }} cases behaved as the contract
+          says.

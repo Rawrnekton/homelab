@@ -1,0 +1,52 @@
+---
+# Default scenario: the shape of argus on Debian trixie.
+#
+# The disk is blank, and the role finds it through a symlink, as in
+# /dev/disk/by-id. The role creates the volume group and two logical volumes
+# with ext4, and mounts them through /etc/fstab. The idempotence step shows that
+# a second run changes nothing. The sizes are small, but the shape is the same
+# as in host_vars/argus.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  # The container is privileged, because it needs loop devices, device-mapper
+  # and mount. It has no systemd, because the role starts no service. For the
+  # safety of the host, see ../resources/prepare.yml.
+  - name: lvm-default
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    command: sleep infinity
+    privileged: true
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+    cleanup: ../resources/cleanup.yml
+  inventory:
+    group_vars:
+      all:
+        molecule_disk_count: 1
+        molecule_disk_size: 600M
+        lvm_volume_groups:
+          - vg: molecule_data
+            devices:
+              - /dev/molecule-disk0
+        lvm_volumes:
+          - vg: molecule_data
+            lv: rancher
+            size: 100m
+            fstype: ext4
+            mountpoint: /var/lib/rancher
+          - vg: molecule_data
+            lv: longhorn
+            size: 200m
+            fstype: ext4
+            mountpoint: /var/lib/longhorn
+verifier:
+  name: ansible

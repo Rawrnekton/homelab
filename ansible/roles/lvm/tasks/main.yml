@@ -1,0 +1,105 @@
+---
+- name: Validate variables
+  ansible.builtin.import_tasks: validate-variables.yml
+
+# A mount on a directory with content hides that content, for example a
+# /var/lib/rancher that k3s wrote to. The role checks this before it makes a
+# change, thus a refused mount leaves no new volume. A directory that is a
+# mountpoint is on a different device than its parent.
+- name: Read the mountpoints and their parents
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: lvm_mountpoint_stats
+  loop: >-
+    {{ lvm_volumes | selectattr('mountpoint', 'defined') |
+    map(attribute='mountpoint') | map('ansible.builtin.dirname') | list +
+    lvm_volumes | selectattr('mountpoint', 'defined') |
+    map(attribute='mountpoint') | list }}
+
+- name: Find content in the mountpoints that are not mounted yet
+  vars:
+    stats:
+      "{{ lvm_mountpoint_stats.results | items2dict(key_name='item',
+      value_name='stat') }}"
+  ansible.builtin.find:
+    paths: "{{ item }}"
+    hidden: true
+    file_type: any
+  register: lvm_mountpoint_content
+  loop: >-
+    {{ lvm_volumes | selectattr('mountpoint', 'defined') |
+    map(attribute='mountpoint') | list }}
+  when:
+    - stats[item].exists
+    - stats[item].isdir
+    - stats[item].dev == stats[item | dirname].dev
+
+- name: Validate the mountpoints that are not mounted yet are empty
+  vars:
+    full_mountpoints: >-
+      {{ lvm_mountpoint_content.results | rejectattr('skipped', 'defined') |
+      selectattr('matched', '>', 0) | map(attribute='item') | list }}
+  ansible.builtin.assert:
+    that:
+      - full_mountpoints | length == 0
+    fail_msg: >-
+      {{ full_mountpoints }} are not empty, and a mount would hide their
+      content. Move the content onto the logical volume by hand, or empty the
+      directory, then run the role again.
+
+- name: Install lvm2
+  ansible.builtin.package:
+    name: lvm2
+    state: present
+
+# remove_extra_pvs is true by default in community.general.lvg. Then lvg removes
+# from the group each physical volume that is not in the list. The volume groups
+# of the installer must stay, and also a device that is not in the list by
+# mistake. Thus it is false. pvresize stays false (the default): the role does
+# not partition, thus a device does not grow under a physical volume.
+- name: Create the volume groups
+  community.general.lvg:
+    vg: "{{ item.vg }}"
+    pvs: "{{ item.devices }}"
+    remove_extra_pvs: false
+    state: present
+  loop: "{{ lvm_volume_groups }}"
+  loop_control:
+    label: "{{ item.vg }}"
+
+# No force: without it, lvol does not shrink a volume, and it fails with "Sorry,
+# no shrinking of <lv> without force=true".
+- name: Create or grow the logical volumes
+  community.general.lvol:
+    vg: "{{ item.vg }}"
+    lv: "{{ item.lv }}"
+    size: "{{ item.size }}"
+    resizefs: "{{ item.resizefs | default(true) }}"
+  loop: "{{ lvm_volumes }}"
+  loop_control:
+    label: "{{ item.vg }}/{{ item.lv }}"
+
+# No force: a device with a filesystem stays as it is. A different filesystem
+# type causes the task to fail, and the role does not format the device.
+- name: Create the filesystems
+  community.general.filesystem:
+    fstype: "{{ item.fstype }}"
+    dev: "/dev/{{ item.vg }}/{{ item.lv }}"
+  loop: "{{ lvm_volumes | selectattr('fstype', 'defined') }}"
+  loop_control:
+    label: "{{ item.vg }}/{{ item.lv }}"
+
+# opts, dump and passno are set, because the fstab lines on argo have these
+# values. A different line remounts the volume.
+- name: Mount the logical volumes
+  ansible.posix.mount:
+    path: "{{ item.mountpoint }}"
+    src: "/dev/{{ item.vg }}/{{ item.lv }}"
+    fstype: "{{ item.fstype }}"
+    opts: defaults
+    dump: "0"
+    passno: "0"
+    state: mounted
+  loop: "{{ lvm_volumes | selectattr('mountpoint', 'defined') }}"
+  loop_control:
+    label: "{{ item.mountpoint }}"

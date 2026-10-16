@@ -1,0 +1,17 @@
+---
+lvm_volume_groups:
+  - vg: data
+    devices:
+      - /dev/disk/by-id/nvme-CT1000P310SSD2_253151E4F6C8
+
+lvm_volumes:
+  - vg: data
+    lv: rancher
+    size: 100g
+    fstype: ext4
+    mountpoint: /var/lib/rancher
+  - vg: data
+    lv: longhorn
+    size: 500g
+    fstype: ext4
+    mountpoint: /var/lib/longhorn
