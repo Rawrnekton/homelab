@@ -1,0 +1,6 @@
+---
+# Read by the ISPConfig tasks of the wireguard role. They run once, delegated
+# to localhost, from the first host of the gateway:vps play - the gateway. The
+# secrets are in gateway/vault.
+wireguard_ispconfig_username: "{{ vault_wireguard_ispconfig_username }}"
+wireguard_ispconfig_password: "{{ vault_wireguard_ispconfig_password }}"
