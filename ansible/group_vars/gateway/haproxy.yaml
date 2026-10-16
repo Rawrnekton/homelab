@@ -1,5 +1,4 @@
 ---
-# defaults file for haproxy
 haproxy_base_domain: cindergla.de
 
 haproxy_https_backends:

@@ -1,5 +1,4 @@
 ---
-# defaults file for iscsi-client
 iscsi_client_targets:
   - name: secretmemestash
     portal: secretmemestash.cindergla.de
