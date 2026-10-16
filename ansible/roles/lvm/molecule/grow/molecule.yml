@@ -1,0 +1,55 @@
+---
+# Grow scenario: the shape of argo on Ubuntu noble. A second run then uses
+# larger sizes and one more disk.
+#
+# On the second run, the volumes grow, and the ext4 grows with them while it is
+# mounted. The new disk joins the volume group. The first disk stays in the
+# group, although the second run does not list it (remove_extra_pvs: false).
+# side_effect.yml contains the values for the second run.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  # The container is privileged, because it needs loop devices, device-mapper
+  # and mount. It has no systemd, because the role starts no service. For the
+  # safety of the host, see ../resources/prepare.yml.
+  - name: lvm-grow
+    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    pre_build_image: true
+    command: sleep infinity
+    privileged: true
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+    cleanup: ../resources/cleanup.yml
+  inventory:
+    group_vars:
+      all:
+        molecule_disk_count: 2
+        molecule_disk_size: 400M
+        # The same volumes as in group_vars/argo/lvm.yml. The role does not
+        # mount the first volume, because it is the root on argo and the
+        # installer made its filesystem. The second volume has ext4 at
+        # /var/lib/longhorn.
+        lvm_volume_groups:
+          - vg: molecule_ubuntu-vg
+            devices:
+              - /dev/molecule-disk0
+        lvm_volumes:
+          - vg: molecule_ubuntu-vg
+            lv: ubuntu-lv
+            size: 100m
+            fstype: ext4
+          - vg: molecule_ubuntu-vg
+            lv: longhorn-lv
+            size: 100m
+            fstype: ext4
+            mountpoint: /var/lib/longhorn
+verifier:
+  name: ansible
