@@ -1,0 +1,83 @@
+---
+# Each play gives one bad input and must fail. A topology scenario stops at the
+# first failure, thus each case causes its play to fail if the role accepts the
+# input.
+- name: Put a file where a new volume would be mounted
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Create /srv/full
+      ansible.builtin.file:
+        path: /srv/full
+        state: directory
+        mode: "0755"
+
+    - name: Write a file into /srv/full
+      ansible.builtin.copy:
+        content: "must stay visible\n"
+        dest: /srv/full/keep.txt
+        mode: "0644"
+
+    - name: Write a file onto the mounted volume
+      ansible.builtin.copy:
+        content: "must survive\n"
+        dest: /srv/data/keep.txt
+        mode: "0644"
+
+- name: Refuse to shrink a volume
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run the role with a smaller size
+      block:
+        - name: Submit 52m for the 100m volume
+          ansible.builtin.include_role:
+            name: lvm
+          vars:
+            lvm_volumes:
+              - vg: molecule_data
+                lv: data
+                size: 52m
+                fstype: ext4
+                mountpoint: /srv/data
+
+        - name: The role must not get here
+          ansible.builtin.fail:
+            msg: The role accepted a smaller size.
+      rescue:
+        - name: The run failed because lvol refused to shrink
+          ansible.builtin.assert:
+            that:
+              - "'no shrinking' in ansible_failed_result.results | default([]) |
+                map(attribute='msg') | join(' ')"
+            fail_msg: "{{ ansible_failed_result | to_json }}"
+
+- name: Refuse to mount over content
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run the role with a mountpoint that has a file in it
+      block:
+        - name: Submit a new volume for /srv/full
+          ansible.builtin.include_role:
+            name: lvm
+          vars:
+            lvm_volumes:
+              - vg: molecule_data
+                lv: full
+                size: 52m
+                fstype: ext4
+                mountpoint: /srv/full
+
+        - name: The role must not get here
+          ansible.builtin.fail:
+            msg: The role mounted over a directory with content.
+      rescue:
+        - name: The run failed because the mountpoint is not empty
+          ansible.builtin.assert:
+            that:
+              - "'are not empty' in ansible_failed_result.msg | default('')"
+            fail_msg: "{{ ansible_failed_result | to_json }}"
