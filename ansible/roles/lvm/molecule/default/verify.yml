@@ -1,0 +1,65 @@
+---
+# The effect: the volume group and the volumes as LVM reports them, and the
+# mounts as the kernel reports them. The fstab line is asserted as text too,
+# because the former lvm-setup role wrote this exact line on argo, and the
+# role must keep it to change nothing there.
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read the LVM state and the mounts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - hardware
+
+    - name: The volume group sits on the test disk
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.lvm.vgs.molecule_data.num_pvs | int == 1
+          - ansible_facts.lvm.vgs.molecule_data.num_lvs | int == 2
+        fail_msg: "{{ ansible_facts.lvm.vgs | to_json }}"
+
+    - name: The logical volumes have their sizes
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.lvm.lvs.rancher.vg == 'molecule_data'
+          - ansible_facts.lvm.lvs.rancher.size_g | float == 0.10
+          - ansible_facts.lvm.lvs.longhorn.size_g | float == 0.20
+        fail_msg: "{{ ansible_facts.lvm.lvs | to_json }}"
+
+    - name: The volumes are mounted with ext4
+      vars:
+        mounts:
+          "{{ ansible_facts.mounts | items2dict(key_name='mount',
+          value_name='device') }}"
+        fstypes:
+          "{{ ansible_facts.mounts | items2dict(key_name='mount',
+          value_name='fstype') }}"
+      ansible.builtin.assert:
+        that:
+          - mounts['/var/lib/rancher'] == '/dev/mapper/molecule_data-rancher'
+          - mounts['/var/lib/longhorn'] == '/dev/mapper/molecule_data-longhorn'
+          - fstypes['/var/lib/rancher'] == 'ext4'
+          - fstypes['/var/lib/longhorn'] == 'ext4'
+        fail_msg: "{{ ansible_facts.mounts | to_json }}"
+
+    - name: Read /etc/fstab
+      ansible.builtin.slurp:
+        src: /etc/fstab
+      register: fstab
+
+    - name: The fstab lines have the shape of the argo line
+      vars:
+        lines: "{{ fstab.content | b64decode | split('\n') }}"
+      ansible.builtin.assert:
+        that:
+          - >-
+            '/dev/molecule_data/rancher /var/lib/rancher ext4 defaults 0 0' in
+            lines
+          - >-
+            '/dev/molecule_data/longhorn /var/lib/longhorn ext4 defaults 0 0' in
+            lines
+        fail_msg: "{{ lines | to_json }}"

@@ -1,0 +1,25 @@
+---
+# The play's vars sit above the group_vars of the scenario, so the larger
+# sizes win here and nowhere else. disk0 is left out of the device list on
+# purpose: it must stay in the volume group. The longhorn volume needs more
+# than disk0 holds, so it can only grow onto disk1.
+- name: Re-run the role with larger sizes and a second disk
+  hosts: all
+  become: true
+  vars:
+    lvm_volume_groups:
+      - vg: molecule_ubuntu-vg
+        devices:
+          - /dev/molecule-disk1
+    lvm_volumes:
+      - vg: molecule_ubuntu-vg
+        lv: ubuntu-lv
+        size: 152m
+        fstype: ext4
+      - vg: molecule_ubuntu-vg
+        lv: longhorn-lv
+        size: 500m
+        fstype: ext4
+        mountpoint: /var/lib/longhorn
+  roles:
+    - role: lvm

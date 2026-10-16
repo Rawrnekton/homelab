@@ -1,0 +1,126 @@
+---
+# Rules that meta/argument_specs.yml cannot express. Most type errors are
+# already rejected by the argument spec before this file runs.
+
+# The argument spec accepts a string for a list of strings (it splits it at
+# commas for the check) but leaves the variable a string, and lvg would then
+# get one device named after the whole string. The top-level lists hold dicts,
+# and there the argument spec rejects a string itself.
+- name: Validate the devices of every volume group are a list
+  vars:
+    bad_groups: >-
+      {{ lvm_volume_groups | rejectattr('devices', 'sequence') | list +
+      lvm_volume_groups | selectattr('devices', 'string') | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_groups | length == 0
+    fail_msg: >-
+      The devices of a volume group must be a list, one device per item. Bad
+      groups: {{ bad_groups }}
+
+# The character set of lvm(8), "VALID NAMES". A name that LVM rejects would
+# fail half way through the run, after the volume groups were created.
+- name: Validate the volume group and logical volume names
+  vars:
+    name_pattern: "^[A-Za-z0-9_+.][A-Za-z0-9_+.-]*$"
+    names: >-
+      {{ lvm_volume_groups | map(attribute='vg') | list + lvm_volumes |
+      map(attribute='vg') | list + lvm_volumes | map(attribute='lv') | list }}
+    bad_names: >-
+      {{ names | reject('match', name_pattern) | list + names | select('in',
+      ['.', '..']) | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_names | length == 0
+    fail_msg: >-
+      A volume group or logical volume name may hold only letters, digits and
+      '+_.-', and must not start with '-'. Bad names: {{ bad_names }}
+
+- name: Validate the volume groups are unique
+  vars:
+    vg_names: "{{ lvm_volume_groups | map(attribute='vg') | list }}"
+  ansible.builtin.assert:
+    that:
+      - vg_names | unique | length == vg_names | length
+    fail_msg: >-
+      Every volume group may appear once in lvm_volume_groups. Got: {{ vg_names
+      }}
+
+- name: Validate the devices are absolute paths
+  vars:
+    devices: "{{ lvm_volume_groups | map(attribute='devices') | flatten }}"
+    bad_devices: "{{ devices | reject('match', '^/\\S+$') | list }}"
+  ansible.builtin.assert:
+    that:
+      - lvm_volume_groups | rejectattr('devices') | list | length == 0
+      - bad_devices | length == 0
+    fail_msg: >-
+      Every volume group needs at least one device, and a device is an absolute
+      path without spaces. Bad devices: {{ bad_devices }}
+
+# One device in two groups: the second lvg call would fail, or move the
+# physical volume.
+- name: Validate no device is listed twice
+  vars:
+    devices: "{{ lvm_volume_groups | map(attribute='devices') | flatten }}"
+  ansible.builtin.assert:
+    that:
+      - devices | unique | length == devices | length
+    fail_msg: >-
+      Every device may appear once in lvm_volume_groups. Got: {{ devices }}
+
+# No unit means megabytes to lvol, which is a trap for "100". A relative size
+# or a percentage grows the volume again on every run.
+- name: Validate the sizes are absolute with a unit
+  vars:
+    bad_volumes: >-
+      {{ lvm_volumes | rejectattr('size', 'match',
+      '^[0-9]+(\.[0-9]+)?[kmgtpeKMGTPE]$') | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_volumes | length == 0
+    fail_msg: >-
+      A size is a number with one unit of k, m, g, t, p or e, for example
+      '100g'. Relative sizes and percentages are not supported. Bad volumes: {{
+      bad_volumes | map(attribute='lv') | list }}
+
+- name: Validate the logical volumes are unique
+  vars:
+    lv_paths:
+      "{{ lvm_volumes | map(attribute='vg') | zip(lvm_volumes |
+      map(attribute='lv')) | map('join', '/') | list }}"
+  ansible.builtin.assert:
+    that:
+      - lv_paths | unique | length == lv_paths | length
+    fail_msg: >-
+      Every logical volume may appear once in lvm_volumes. Got: {{ lv_paths }}
+
+- name: Validate every mountpoint has a filesystem type
+  vars:
+    bad_volumes: >-
+      {{ lvm_volumes | selectattr('mountpoint', 'defined') |
+      rejectattr('fstype', 'defined') | map(attribute='lv') | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_volumes | length == 0
+    fail_msg: >-
+      A logical volume with a mountpoint needs fstype. Bad volumes: {{
+      bad_volumes }}
+
+# The root filesystem is mounted by the installer's fstab line, which the role
+# must not rewrite. A root volume is listed without a mountpoint.
+- name: Validate the mountpoints are absolute, not root, and unique
+  vars:
+    mountpoints: >-
+      {{ lvm_volumes | selectattr('mountpoint', 'defined') |
+      map(attribute='mountpoint') | list }}
+    bad_mountpoints: >-
+      {{ mountpoints | reject('match', '^/\S+$') | list + mountpoints |
+      select('match', '^/+$') | list }}
+  ansible.builtin.assert:
+    that:
+      - bad_mountpoints | length == 0
+      - mountpoints | unique | length == mountpoints | length
+    fail_msg: >-
+      A mountpoint is an absolute path without spaces, not '/', and used once.
+      Got: {{ mountpoints }}

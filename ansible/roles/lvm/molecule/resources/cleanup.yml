@@ -1,0 +1,44 @@
+---
+# Give the loop devices and the device-mapper devices back to the host kernel.
+# The docker driver only removes the container; without this play they stay
+# attached on the host until it reboots. Molecule runs cleanup before destroy,
+# also after a failed step.
+#
+# One script, because no module does umount-all, vgremove or losetup -d, and
+# every step must run even when one before it failed (no `set -e`). It only
+# touches molecule_* volume groups and the /dev/molecule-disk* devices.
+#
+# A run that was killed before cleanup leaves loop devices on the host. Find
+# them with `losetup -l | grep molecule-disk` and detach them with
+# `sudo losetup -d /dev/loopN`.
+- name: Cleanup
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Detach the test volume groups and disks
+      ansible.builtin.shell:
+        cmd: |
+          set -uo pipefail
+          rc=0
+          for target in $(findmnt -rn -o TARGET,SOURCE |
+                          awk '$2 ~ "^/dev/mapper/molecule_" { print $1 }'); do
+            umount "$target" || rc=1
+          done
+          for vg in $(vgs --noheadings -o vg_name 2>/dev/null | grep -o 'molecule_[^ ]*'); do
+            vgchange -an "$vg" || rc=1
+            vgremove -ff -y "$vg" || rc=1
+          done
+          for disk in /dev/molecule-disk*; do
+            [ -e "$disk" ] || continue
+            loop=$(readlink -f "$disk")
+            pvremove -ff -y "$loop" >/dev/null 2>&1
+            losetup -d "$loop" || rc=1
+            rm -f "$disk"
+          done
+          exit $rc
+        executable: /bin/bash
+      register: molecule_cleanup
+      changed_when: true
+      # The container is gone when cleanup runs after a failed create.
+      ignore_unreachable: true
