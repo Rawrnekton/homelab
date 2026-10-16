@@ -1,0 +1,9 @@
+---
+# k3s for the argo cluster. It is not in use yet: the argo play in site.yml is
+# commented out until the reinstall. Keep all k3s_* variables for argo here,
+# never in homelab or all. homelab comes after argo in the sort order, and its
+# values override the values of argo.
+
+# Longhorn creates its default disk only on a node with this label.
+k3s_node_labels:
+  - "node.longhorn.io/create-default-disk=true"
