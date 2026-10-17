@@ -1,0 +1,42 @@
+---
+- name: Install the iSCSI initiator and the NFS client
+  ansible.builtin.apt:
+    name:
+      - open-iscsi
+      - nfs-common
+    state: present
+
+# Longhorn attaches each volume through iSCSI. iscsid needs the module when it
+# starts, and again after each reboot.
+- name: Load the iscsi_tcp kernel module, also on boot
+  community.general.modprobe:
+    name: iscsi_tcp
+    state: present
+    persistent: present
+
+- name: Start and enable iscsid
+  ansible.builtin.systemd_service:
+    name: iscsid
+    state: started
+    enabled: true
+
+- name: Read the installed packages
+  ansible.builtin.package_facts:
+
+# multipathd takes the iSCSI devices of Longhorn, and then the mount fails with
+# "already mounted or mount point busy". The blacklist comes from the Longhorn
+# knowledge base (kb/troubleshooting-volume-with-multipath). Raspberry Pi OS
+# does not have multipath-tools, thus the task applies only when it is there.
+- name: Keep multipathd off the Longhorn devices
+  ansible.builtin.blockinfile:
+    path: /etc/multipath.conf
+    create: true
+    mode: "0644"
+    append_newline: true
+    prepend_newline: true
+    block: |
+      blacklist {
+          devnode "^sd[a-z0-9]+"
+      }
+  when: "'multipath-tools' in ansible_facts.packages"
+  notify: Restart multipathd

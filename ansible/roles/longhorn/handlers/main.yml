@@ -1,6 +1,0 @@
----
-# handlers file for longhorn
-- name: longhorn | restart multipathd
-  ansible.builtin.service:
-    name: multipathd
-    state: restarted
