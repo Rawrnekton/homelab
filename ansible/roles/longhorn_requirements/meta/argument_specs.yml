@@ -1,0 +1,14 @@
+---
+argument_specs:
+  main:
+    short_description: Prepare a node for Longhorn.
+    description:
+      - Installs C(open-iscsi) and C(nfs-common), loads C(iscsi_tcp) now and on
+        boot, and starts and enables C(iscsid).
+      - When C(multipath-tools) is installed, blacklists C(^sd[a-z0-9]+) in
+        C(/etc/multipath.conf) and restarts C(multipathd).
+      - Longhorn itself (the Helm release, the storage classes) is not in this
+        role.
+    author:
+      - Jonathan Gerdes
+    options: {}
