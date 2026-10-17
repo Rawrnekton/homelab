@@ -32,7 +32,7 @@
   roles:
     - { role: lvm, tags: [lvm] }
     - { role: cluster-setup, tags: [cluster] }
-    - { role: longhorn, tags: [longhorn] }
+    - { role: longhorn_requirements, tags: [longhorn_requirements] }
 
 - name: Prepare the storage of the monitoring host
   hosts: monitoring
