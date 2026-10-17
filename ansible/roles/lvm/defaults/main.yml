@@ -1,0 +1,4 @@
+---
+# Descriptions live in meta/argument_specs.yml.
+lvm_volume_groups: []
+lvm_volumes: []

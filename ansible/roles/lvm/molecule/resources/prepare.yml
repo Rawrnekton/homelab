@@ -1,0 +1,83 @@
+---
+# A container has no disk to give to LVM. Back each test disk with a file on a
+# loop device, and give it a stable name, /dev/molecule-disk<N>, the way
+# /dev/disk/by-id gives one to the NVMe of argus.
+#
+# Loop devices and device-mapper devices belong to the kernel of the host, not
+# to the container. Three rules keep the test away from the disks of the host:
+#   - LVM in the container sees the test loop devices and nothing else
+#     (lvmlocal.conf below). The host that runs the tests may use LVM itself.
+#   - Every test volume group is named molecule_*, so it cannot clash with a
+#     volume group of the host, for example ubuntu-vg.
+#   - cleanup.yml detaches all of it again, also after a failed step.
+#
+# Scenario variables:
+#   molecule_disk_count - number of test disks (default 1)
+#   molecule_disk_size  - size of each test disk (default 400M)
+- name: Prepare
+  hosts: all
+  become: true
+  vars:
+    disk_count: "{{ molecule_disk_count | default(1) }}"
+    disk_size: "{{ molecule_disk_size | default('400M') }}"
+  tasks:
+    # lvm2 comes first: its package ships lvmlocal.conf, and the file written
+    # below must replace that one, not be replaced by it. The role still runs
+    # its own install task, which then finds the package in place. The images
+    # ship without an apt cache; the real hosts have one.
+    - name: Install lvm2 and the ext4 tools
+      ansible.builtin.apt:
+        name:
+          - lvm2
+          - e2fsprogs
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Create the backing files of the test disks
+      ansible.builtin.command:
+        cmd: "truncate -s {{ disk_size }} /var/tmp/molecule-disk{{ item }}.img"
+        creates: "/var/tmp/molecule-disk{{ item }}.img"
+      loop: "{{ range(disk_count | int) | list }}"
+
+    # No module attaches a loop device. losetup names the next free one; the
+    # container's /dev is a copy taken at its start, so a loop device the
+    # kernel created later has no node here yet, and mknod adds it (block
+    # major 7, minor = the loop number).
+    - name: Attach the test disks to loop devices
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          loop=$(losetup --find)
+          [ -b "$loop" ] || mknod "$loop" b 7 "${loop#/dev/loop}"
+          losetup "$loop" /var/tmp/molecule-disk{{ item }}.img
+          ln -s "$loop" /dev/molecule-disk{{ item }}
+        executable: /bin/bash
+        creates: "/dev/molecule-disk{{ item }}"
+      loop: "{{ range(disk_count | int) | list }}"
+
+    - name: Find the loop devices of the test disks
+      ansible.builtin.stat:
+        path: "/dev/molecule-disk{{ item }}"
+      register: molecule_disks
+      loop: "{{ range(disk_count | int) | list }}"
+
+    # No udev runs in the container, so LVM creates the device nodes itself
+    # and does not wait for udev to confirm them.
+    - name: Limit LVM to the test disks
+      vars:
+        loop_devices:
+          "{{ molecule_disks.results | map(attribute='stat.lnk_source') }}"
+      ansible.builtin.copy:
+        dest: /etc/lvm/lvmlocal.conf
+        mode: "0644"
+        content: |
+          devices {
+            use_devicesfile = 0
+            obtain_device_list_from_udev = 0
+            filter = [ {% for d in loop_devices %}"a|^{{ d }}$|", {% endfor %}"r|.*|" ]
+          }
+          activation {
+            udev_sync = 0
+            udev_rules = 0
+          }

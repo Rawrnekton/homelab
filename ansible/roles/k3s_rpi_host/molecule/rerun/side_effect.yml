@@ -1,0 +1,17 @@
+---
+# The play's vars sit above the group_vars of the scenario, so the longer lists
+# win here and nowhere else. `rootwait` is in the stock cmdline.txt already.
+- name: Re-run the role with longer lists
+  hosts: all
+  become: true
+  vars:
+    k3s_rpi_host_cmdline_params:
+      - cgroup_enable=memory
+      - rootwait
+      - cgroup_memory=1
+      - systemd.unified_cgroup_hierarchy=1
+    k3s_rpi_host_config_lines:
+      - kernel=kernel8.img
+      - dtparam=pciex1_gen=3
+  roles:
+    - role: k3s_rpi_host

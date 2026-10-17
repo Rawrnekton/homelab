@@ -1,0 +1,43 @@
+---
+# Twice, so the second run sees a file without the block. The checksum before
+# and after the second run must match.
+- name: Remove the config.txt lines
+  hosts: all
+  become: true
+  vars:
+    k3s_rpi_host_config_lines: []
+  roles:
+    - role: k3s_rpi_host
+
+- name: Record config.txt after the first removal
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the checksum
+      ansible.builtin.stat:
+        path: /boot/firmware/config.txt
+      register: config_after_first
+
+- name: Remove the config.txt lines again
+  hosts: all
+  become: true
+  vars:
+    k3s_rpi_host_config_lines: []
+  roles:
+    - role: k3s_rpi_host
+
+- name: Compare config.txt after the second removal
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the checksum
+      ansible.builtin.stat:
+        path: /boot/firmware/config.txt
+      register: config_after_second
+
+    - name: The second removal changed nothing
+      ansible.builtin.assert:
+        that:
+          - config_after_second.stat.checksum ==
+            config_after_first.stat.checksum
+          - config_after_second.stat.mtime == config_after_first.stat.mtime

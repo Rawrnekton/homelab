@@ -1,0 +1,43 @@
+---
+# After the refused runs the host is as converge left it: the volume has its
+# size and its data, /srv/full is a plain directory with its file, and the
+# refused volume was never created.
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read the LVM state and the mounts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - hardware
+
+    - name: The volume kept its size, and no new volume exists
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.lvm.lvs.data.size_g | float == 0.10
+          - "'full' not in ansible_facts.lvm.lvs"
+        fail_msg: "{{ ansible_facts.lvm.lvs | to_json }}"
+
+    - name: /srv/full is not a mountpoint
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.mounts | selectattr('mount', '==', '/srv/full') | list
+            | length == 0
+        fail_msg: "{{ ansible_facts.mounts | to_json }}"
+
+    - name: Read the two files
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      register: kept_files
+      loop:
+        - /srv/full/keep.txt
+        - /srv/data/keep.txt
+
+    - name: Both files are unchanged
+      ansible.builtin.assert:
+        that:
+          - kept_files.results[0].content | b64decode == 'must stay visible\n'
+          - kept_files.results[1].content | b64decode == 'must survive\n'

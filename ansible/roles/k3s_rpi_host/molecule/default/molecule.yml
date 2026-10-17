@@ -1,0 +1,37 @@
+---
+# Default scenario: the argus values on the stock boot files of argus.
+#
+# Goal: the two parameters land at the end of the one line of cmdline.txt, the
+# rest of the line is untouched, and config.txt gets the block at its end with
+# everything before it untouched. The idempotence step proves that a second
+# run changes nothing, and so never triggers a second reboot.
+dependency:
+  name: galaxy
+role_name_check: 2
+driver:
+  name: docker
+platforms:
+  # No systemd and no privileges: the role edits two files and nothing else.
+  # The reboot cannot run in a container; every scenario switches it off.
+  - name: k3s-rpi-host-default
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    command: sleep infinity
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  playbooks:
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+  inventory:
+    group_vars:
+      all:
+        k3s_rpi_host_cmdline_params:
+          - cgroup_enable=memory
+          - cgroup_memory=1
+        k3s_rpi_host_config_lines:
+          - kernel=kernel8.img
+        k3s_rpi_host_reboot: false
+verifier:
+  name: ansible

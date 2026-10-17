@@ -1,0 +1,29 @@
+---
+# Side effect: change the config and force the rolling restart.
+#
+# Adding a TLS SAN is the cheapest config change that is visible from outside
+# the node afterwards - it lands on the API server certificate.
+- name: Record the service start time before the config change
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the current k3s service state
+      ansible.builtin.systemd:
+        name: k3s
+      register: k3s_service_before
+
+    - name: Save the start time for the verify playbook
+      ansible.builtin.copy:
+        content: "{{ k3s_service_before.status.ActiveEnterTimestamp }}"
+        dest: /var/tmp/molecule-k3s-active-before
+        mode: "0644"
+
+- name: Re-converge with an additional TLS SAN
+  hosts: all
+  become: true
+  vars:
+    k3s_tls_san:
+      - k3s-api.molecule.test
+      - k3s-api-added-later.molecule.test
+  roles:
+    - role: k3s

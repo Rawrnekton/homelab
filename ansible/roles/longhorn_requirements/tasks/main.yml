@@ -1,0 +1,47 @@
+---
+# The node prerequisites of Longhorn, from its installation requirements. The
+# Helm release and the storage classes are not in this role; they come from
+# ArgoCD.
+
+- name: Install the iSCSI initiator and the NFS client
+  ansible.builtin.apt:
+    name:
+      - open-iscsi
+      - nfs-common
+    state: present
+
+# Longhorn attaches every volume through iSCSI on the node. The module must be
+# loaded before iscsid starts, and again after a reboot.
+- name: Load the iscsi_tcp kernel module, also on boot
+  community.general.modprobe:
+    name: iscsi_tcp
+    state: present
+    persistent: present
+
+- name: Start and enable iscsid
+  ansible.builtin.systemd_service:
+    name: iscsid
+    state: started
+    enabled: true
+
+- name: Read the installed packages
+  ansible.builtin.package_facts:
+
+# multipathd claims the iSCSI block devices of Longhorn, and the mount then
+# fails with "already mounted or mount point busy". Fix from the Longhorn
+# knowledge base (kb/troubleshooting-volume-with-multipath). Only written when
+# multipath-tools is installed (argo nodes, Ubuntu server); Raspberry Pi OS
+# does not ship it, and without multipathd there is nothing to blacklist.
+- name: Keep multipathd off the Longhorn devices
+  ansible.builtin.blockinfile:
+    path: /etc/multipath.conf
+    create: true
+    mode: "0644"
+    append_newline: true
+    prepend_newline: true
+    block: |
+      blacklist {
+          devnode "^sd[a-z0-9]+"
+      }
+  when: "'multipath-tools' in ansible_facts.packages"
+  notify: Restart multipathd

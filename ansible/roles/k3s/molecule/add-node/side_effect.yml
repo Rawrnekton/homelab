@@ -1,0 +1,23 @@
+---
+# Side effect: add the new worker by re-running the role over the whole
+# inventory, exactly as a user would after adding a host.
+- name: Record the service start times of the existing nodes
+  hosts: initial
+  become: true
+  tasks:
+    - name: Read the current k3s service state
+      ansible.builtin.systemd:
+        name: "{{ 'k3s' if k3s_node_role == 'control' else 'k3s-agent' }}"
+      register: k3s_service_before
+
+    - name: Save the start time for the verify playbook
+      ansible.builtin.copy:
+        content: "{{ k3s_service_before.status.ActiveEnterTimestamp }}"
+        dest: /var/tmp/molecule-k3s-active-before
+        mode: "0644"
+
+- name: Re-run the role over the whole inventory
+  hosts: all
+  become: true
+  roles:
+    - role: k3s

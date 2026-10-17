@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  author: Jonathan Gerdes
+  description: prepare a node for Longhorn (iSCSI, NFS client, multipath)
+  license: MIT
+  min_ansible_version: 2.21.2
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+    - name: Debian
+      versions:
+        - trixie
+
+  galaxy_tags:
+    - longhorn
+    - storage
+    - homelab
+
+dependencies: []

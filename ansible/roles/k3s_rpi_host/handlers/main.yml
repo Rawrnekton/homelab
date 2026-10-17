@@ -1,0 +1,5 @@
+---
+- name: Reboot to apply the boot configuration
+  ansible.builtin.reboot:
+    msg: Reboot to apply the boot configuration (k3s_rpi_host)
+  when: k3s_rpi_host_reboot

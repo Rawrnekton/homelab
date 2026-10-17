@@ -26,10 +26,24 @@
   roles:
     - { role: dns, tags: [dns] }
 
-- name: Provision Cluster
+- name: Provision argo Cluster
   hosts: argo
   become: true
   roles:
-    - { role: lvm-setup, tags: [lvm] }
-    - { role: cluster-setup, tags: [cluster] }
-    - { role: longhorn, tags: [longhorn] }
+    - { role: lvm, tags: [lvm] }
+    - { role: k3s, tags: [k3s] }
+    - { role: longhorn_requirements, tags: [longhorn_requirements] }
+
+- name: Prepare the boot of the Raspberry Pis that run k3s
+  hosts: k3s_rpi_host
+  become: true
+  roles:
+    - { role: k3s_rpi_host, tags: [k3s_rpi_host] }
+
+- name: Provision monitoring "cluster"
+  hosts: monitoring
+  become: true
+  roles:
+    - { role: lvm, tags: [lvm] }
+    - { role: k3s, tags: [k3s] }
+    - { role: longhorn_requirements, tags: [longhorn_requirements] }

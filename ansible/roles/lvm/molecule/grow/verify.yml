@@ -1,0 +1,39 @@
+---
+# The effect after the second run: LVM's own view of the group and the
+# volumes, and the size of the mounted filesystem as the kernel reports it.
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read the LVM state and the mounts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - hardware
+
+    - name: Both disks are in the volume group
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.lvm.vgs['molecule_ubuntu-vg'].num_pvs | int == 2
+        fail_msg: "{{ ansible_facts.lvm.vgs | to_json }}"
+
+    - name: The logical volumes grew
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.lvm.lvs['ubuntu-lv'].size_g | float == 0.15
+          - ansible_facts.lvm.lvs['longhorn-lv'].size_g | float == 0.49
+        fail_msg: "{{ ansible_facts.lvm.lvs | to_json }}"
+
+    # ext4 keeps a few percent for its metadata. More than 400 MiB proves the
+    # filesystem grew past the 100 MiB of the first run.
+    - name: The mounted filesystem grew with its volume
+      vars:
+        longhorn_mount: >-
+          {{ ansible_facts.mounts | selectattr('mount', '==',
+          '/var/lib/longhorn') | first }}
+      ansible.builtin.assert:
+        that:
+          - longhorn_mount.size_total > 400 * 1024 * 1024
+        fail_msg: "{{ longhorn_mount | to_json }}"

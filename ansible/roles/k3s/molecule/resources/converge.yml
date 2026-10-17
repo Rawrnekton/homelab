@@ -1,0 +1,8 @@
+---
+# Shared by every scenario that converges all of its hosts at once.
+# Scenarios that need a different shape (add-node) keep their own converge.yml.
+- name: Converge
+  hosts: all
+  become: true
+  roles:
+    - role: k3s
