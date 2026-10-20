@@ -1,0 +1,26 @@
+#cloud-config
+
+hostname: argus
+fqdn: argus.lan
+manage_etc_hosts: true
+
+users:
+  - name: joge
+    gecos: Ansible admin
+    shell: /bin/bash
+    groups: [adm, sudo]
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJiGIUe04pnynToGcO5PFBF6xbWEZVuDR8rQKQ0AyFHx jonathan@hound
+
+disable_root: true
+ssh_pwauth: false
+
+package_update: false
+package_upgrade: false
+
+# On the first boot, the generated netplan file does not exist when networkd
+# starts. This command corrects that.
+runcmd:
+  - [netplan, apply]
