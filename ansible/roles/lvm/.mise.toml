@@ -1,0 +1,23 @@
+[tasks.docs]
+description = "Render role documentation into README.md"
+run = "aar-doc --output-mode inject --output-file README.md . markdown"
+
+# Each task runs scripts/molecule-tally.sh. The script runs the scenarios one
+# after the other, and it continues when a scenario fails. At the end, it shows
+# a table of the results. The exit status is 0 only when all scenarios pass.
+
+[tasks.fast]
+description = "Molecule: the local checks and the argus shape (fast group)"
+dir = "{{ config_root }}"
+run = "./scripts/molecule-tally.sh local default"
+
+# The fast scenarios run first, so that a defect shows early.
+[tasks.full]
+description = "Molecule: every scenario (full group)"
+dir = "{{ config_root }}"
+run = "./scripts/molecule-tally.sh local default refusals grow"
+
+[tasks.scenario]
+description = "Molecule: run the named scenarios (mise run scenario grow refusals)"
+dir = "{{ config_root }}"
+run = "./scripts/molecule-tally.sh {{ arg(name='scenario', var=true) }}"

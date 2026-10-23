@@ -1,0 +1,19 @@
+---
+# The two parts of the input contract, in the same order as in the role: first
+# the argument spec (types and shapes), then the rules in
+# tasks/validate-variables.yml.
+#
+# The task reads the spec from meta/argument_specs.yml and validates it
+# explicitly. Ansible validates only the `main` entry point automatically, and a
+# run of `main` here changes the disks of the controller.
+- name: Validate against the argument spec
+  ansible.builtin.validate_argument_spec:
+    argument_spec:
+      "{{ (lookup('ansible.builtin.file', playbook_dir ~
+      '/../../meta/argument_specs.yml') | from_yaml).argument_specs.main.options
+      }}"
+
+- name: Validate the remaining rules
+  ansible.builtin.include_role:
+    name: lvm
+    tasks_from: validate-variables.yml

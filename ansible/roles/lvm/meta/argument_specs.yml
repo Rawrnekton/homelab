@@ -1,0 +1,101 @@
+---
+argument_specs:
+  main:
+    short_description:
+      Create and grow LVM volume groups and logical volumes, and mount them.
+    description:
+      - Installs C(lvm2), creates the volume groups of C(lvm_volume_groups),
+        then creates or grows the logical volumes of C(lvm_volumes), puts a
+        filesystem on them and mounts them through C(/etc/fstab).
+      - The role only adds and grows. It never shrinks or removes a logical
+        volume, never removes a physical volume from a volume group, and never
+        formats a device that already holds a filesystem. A removed entry is
+        left on the host as it is.
+      - A smaller C(size) than the current one fails the run with the message of
+        C(community.general.lvol) and changes nothing.
+    author:
+      - Jonathan Gerdes
+    options:
+      lvm_volume_groups:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description:
+          - Volume groups that must exist. Each device becomes a physical volume
+            of the group, as the whole device; the role does not partition.
+          - A device that is in the group on the host but not in the list stays
+            in the group. A device added to the list is added to the group.
+        options:
+          vg:
+            type: str
+            required: true
+            description:
+              - Name of the volume group, for example C(data).
+          devices:
+            type: list
+            elements: str
+            required: true
+            description:
+              - Absolute device paths, for example
+                C(/dev/disk/by-id/nvme-CT1000P310SSD2_253151E4F6C8). A symlink
+                is resolved, so a C(by-id) path and the kernel name are the same
+                device.
+      lvm_volumes:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description:
+          - Logical volumes that must exist with at least the given size, in
+            list order.
+          - The volume group must exist, from C(lvm_volume_groups) or from the
+            installer.
+        options:
+          vg:
+            type: str
+            required: true
+            description:
+              - Name of the volume group that holds the logical volume.
+          lv:
+            type: str
+            required: true
+            description:
+              - Name of the logical volume. The device is C(/dev/<vg>/<lv>).
+          size:
+            type: str
+            required: true
+            description:
+              - Absolute size with a unit, one of C(k m g t p e), for example
+                C(100g). The logical volume is created with this size or grown
+                to it.
+              - Relative sizes (C(+10g)) and percentages (C(50%FREE)) are
+                rejected. They grow the volume again on every run.
+          resizefs:
+            type: bool
+            required: false
+            default: true
+            description:
+              - Grow the filesystem together with the logical volume, also a
+                filesystem the role did not create (the root filesystem).
+              - Set C(false) for a volume without a filesystem. C(fsadm) finds
+                no filesystem to grow there and the resize fails.
+          fstype:
+            # The only choice is ext4. The option is a string and not a bool, so
+            # that a later change can add other filesystems.
+            type: str
+            required: false
+            choices:
+              - ext4
+            description:
+              - Filesystem to create on the logical volume when it has none.
+                Without it, the role does not touch the content of the volume.
+          mountpoint:
+            type: path
+            required: false
+            description:
+              - Absolute path to mount the logical volume on. Needs C(fstype).
+              - The line in C(/etc/fstab) is C(/dev/<vg>/<lv> <mountpoint>
+                <fstype> defaults 0 0).
+              - The role refuses to mount on a directory that is not empty,
+                because the mount would hide its content.
