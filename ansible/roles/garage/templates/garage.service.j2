@@ -2,6 +2,7 @@
 Description=Garage Data Store
 After=network-online.target
 Wants=network-online.target
+RequiresMountsFor={{ garage_data_dir }}{% if garage_metadata_snapshot_dir %} {{ garage_metadata_snapshot_dir }}{% endif %}
 
 [Service]
 User=garage
