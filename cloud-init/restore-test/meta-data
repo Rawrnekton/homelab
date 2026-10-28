@@ -1,0 +1,3 @@
+dsmode: local
+instance-id: restore-test
+local-hostname: restore-test
