@@ -1,0 +1,14 @@
+---
+# scripts/prepare-disk.sh makes the partition "data". local-path keeps the
+# restored volumes in /var/lib/rancher/k3s/storage, thus on this volume.
+lvm_volume_groups:
+  - vg: data
+    devices:
+      - /dev/disk/by-partlabel/data
+
+lvm_volumes:
+  - vg: data
+    lv: rancher
+    size: 200g
+    fstype: ext4
+    mountpoint: /var/lib/rancher

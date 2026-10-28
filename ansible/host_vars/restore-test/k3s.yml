@@ -1,0 +1,26 @@
+---
+# Single-node cluster for the restore test of argo. The Cilium values are the
+# same as on argus.
+k3s_cni: cilium
+k3s_cilium_version: "1.20.2"
+k3s_cilium_values:
+  operator:
+    replicas: 1
+  # kube-proxy is off, thus the agent cannot get to the API through a service
+  # IP. It uses the local API server.
+  k8sServiceHost: 127.0.0.1
+  k8sServicePort: 6443
+  ipam:
+    mode: kubernetes
+k3s_kube_proxy_replacement: true
+
+# No Longhorn on the restore test. The Velero restore changes the storage
+# classes longhorn* to local-path.
+k3s_local_path_provisioner_enabled: true
+
+k3s_kubeconfig_fetch: true
+k3s_kubeconfig_dest: ~/.kube/restore-test.yaml
+
+k3s_sysctl_settings:
+  fs.inotify.max_user_instances: 512
+  fs.inotify.max_user_watches: 524288

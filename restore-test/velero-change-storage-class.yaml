@@ -1,0 +1,15 @@
+---
+# restore-test has no Longhorn. Velero changes the storage class of each
+# restored PVC to local-path.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: change-storage-class-config
+  namespace: velero
+  labels:
+    velero.io/plugin-config: ""
+    velero.io/change-storage-class: RestoreItemAction
+data:
+  longhorn: local-path
+  longhorn-r1: local-path
+  longhorn-static: local-path

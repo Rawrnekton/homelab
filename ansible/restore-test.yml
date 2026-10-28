@@ -1,0 +1,12 @@
+---
+# Restore test of the argo cluster on heracles. See docs/restore-test.md.
+# This playbook is separate from site.yml on purpose.
+- name: Provision the restore-test cluster
+  hosts: restore_test
+  become: true
+  roles:
+    - { role: common, tags: [common] }
+    - { role: lvm, tags: [lvm] }
+    - { role: k3s, tags: [k3s] }
+    # Not for Longhorn: open-iscsi is necessary for the iSCSI PV of immich.
+    - { role: longhorn_requirements, tags: [longhorn_requirements] }

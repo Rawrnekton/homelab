@@ -22,3 +22,8 @@ argus
 
 [vps]
 naglfar
+
+# heracles while it runs a restore test of argo, see docs/restore-test.md. The
+# host is in no other group, so that site.yml never runs against it.
+[restore_test]
+restore-test

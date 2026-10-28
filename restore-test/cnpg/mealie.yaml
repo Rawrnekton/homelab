@@ -1,0 +1,48 @@
+---
+# Restore test only, see docs/restore-test.md. The cluster recovers from the
+# barman-cloud backup of mealie-db in production.
+#
+# This ObjectStore uses a Garage key that can only read the bucket. The
+# production ObjectStore "garage" and its secret are not used here.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: garage-ro
+  namespace: mealie
+spec:
+  configuration:
+    destinationPath: s3://cnpg-mealie/
+    endpointURL: https://garage.cindergla.de
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-garage-ro
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-garage-ro
+        key: SECRET_ACCESS_KEY
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mealie-db
+  namespace: mealie
+spec:
+  instances: 1
+  # The same major version as in production. Recovery fails with a different
+  # major version, and the default image of the operator can be newer.
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.5
+  storage:
+    size: 1Gi
+    storageClass: local-path
+  bootstrap:
+    recovery:
+      source: origin
+  # No spec.plugins: this cluster does not archive WAL and does not write to
+  # the bucket.
+  externalClusters:
+    - name: origin
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: garage-ro
+          serverName: mealie-db
