@@ -1,0 +1,33 @@
+---
+# Helm values for Velero on restore-test. Same chart and plugin as
+# argo/infra/velero, with two differences:
+# - accessMode ReadOnly: Velero does not write backups or delete them.
+# - velero-credentials-ro: a Garage key that can only read the bucket.
+# No schedules: the Schedule objects are in argo/infra/velero, not in the chart.
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.14.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+credentials:
+  useSecret: true
+  existingSecret: velero-credentials-ro
+configuration:
+  backupStorageLocation:
+    # The name must be "garage". The backups refer to their location by name.
+    - name: garage
+      provider: aws
+      bucket: velero-basebackup
+      default: true
+      accessMode: ReadOnly
+      config:
+        region: us-east-1
+        s3Url: https://garage.cindergla.de
+        s3ForcePathStyle: "true"
+  volumeSnapshotLocation: []
+snapshotsEnabled: false
+defaultBackupStorageLocation: garage
+uploaderType: kopia
+deployNodeAgent: true
