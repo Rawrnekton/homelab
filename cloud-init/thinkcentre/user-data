@@ -1,0 +1,25 @@
+#cloud-config
+
+# The hostname comes from local-hostname in the meta-data of each host.
+manage_etc_hosts: true
+
+users:
+  - name: joge
+    gecos: Ansible admin
+    shell: /bin/bash
+    groups: [adm, sudo]
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJiGIUe04pnynToGcO5PFBF6xbWEZVuDR8rQKQ0AyFHx jonathan@hound
+
+disable_root: true
+ssh_pwauth: false
+
+package_update: false
+package_upgrade: false
+
+# scripts/prepare-disk.sh sets the size of the root partition. The LVM
+# partition "data" comes directly after it and must not change.
+growpart:
+  mode: "off"
