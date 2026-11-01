@@ -26,7 +26,7 @@ images:
   newName: valkey/valkey
   newTag: 9.1.3-alpine
 - name: busybox
-  newTag: "1.37"
+  newTag: "1.38"
 
 helmCharts:
 - name: nextcloud
