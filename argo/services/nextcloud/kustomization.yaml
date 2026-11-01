@@ -76,6 +76,9 @@ helmCharts:
           $CONFIG = array (
             'default_phone_region' => 'DE',
             'maintenance_window_start' => 1,
+            // auth.cindergla.de resolves to the gateway (192.168.2.170) inside the LAN,
+            // without this user_oidc cannot reach Authentik
+            'allow_local_remote_servers' => true,
           );
 
       hooks:
