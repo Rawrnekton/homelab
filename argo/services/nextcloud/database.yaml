@@ -1,0 +1,26 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: nextcloud-db
+spec:
+  instances: 2
+
+  # pinned, so that a recovery gets the same major version
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.5
+
+  storage:
+    size: 5Gi
+    storageClass: longhorn-r1
+
+  plugins:
+  - name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: garage
+
+  bootstrap:
+    initdb:
+      database: nextcloud
+      owner: nextcloud
+      secret:
+        name: nextcloud-database-secret

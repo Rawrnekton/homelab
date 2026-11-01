@@ -43,3 +43,7 @@ garage_s3_buckets:
     bucket: cnpg-planka
     access_key_id: "{{ vault_garage_cnpg_planka_access_key_id }}"
     secret_key: "{{ vault_garage_cnpg_planka_secret_key }}"
+  - name: cnpg-nextcloud
+    bucket: cnpg-nextcloud
+    access_key_id: "{{ vault_garage_cnpg_nextcloud_access_key_id }}"
+    secret_key: "{{ vault_garage_cnpg_nextcloud_secret_key }}"

@@ -1,0 +1,21 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nextcloud
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: cloud.cindergla.de
+      http:
+        paths:
+          - backend:
+              service:
+                name: nextcloud
+                port:
+                  number: 8080
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - cloud.cindergla.de

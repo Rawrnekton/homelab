@@ -1,0 +1,16 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: nextcloud-db-scheduled-backup
+spec:
+  schedule: "0 45 2 * * *"
+  backupOwnerReference: self
+  target: prefer-standby
+  cluster:
+    name: nextcloud-db
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: garage

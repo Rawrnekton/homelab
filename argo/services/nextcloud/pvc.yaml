@@ -1,0 +1,32 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-data-iscsi
+spec:
+  storageClassName: ""
+  volumeName: nextcloud-data-iscsi
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1T
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nextcloud-data-iscsi
+spec:
+  storageClassName: ""
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  capacity:
+    storage: 1T
+  accessModes:
+    - ReadWriteOnce
+  iscsi:
+    targetPortal: 192.168.2.169:3260
+    iqn: iqn.2013-03.com.wdc:secretmemestash:nextcloud-data
+    lun: 0
+    fsType: ext4

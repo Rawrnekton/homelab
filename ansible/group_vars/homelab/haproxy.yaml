@@ -27,6 +27,7 @@ haproxy_https_backends:
       - copperforge
       - vorleser
       - yopass
+      - cloud
 
   - name: garage
     servers:

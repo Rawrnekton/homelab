@@ -33,6 +33,11 @@ services:
     - name: yopass
       dns_target: "{{ internal_ip_gateway }}"
       is_external: true
+    # is_external stays false until the old cloud.cindergla.de site on naglfar is gone,
+    # the wireguard play would otherwise create a second vhost for it on naglfar
+    - name: cloud
+      dns_target: "{{ internal_ip_gateway }}"
+      is_external: false
     - name: fliederhof
       dns_target: "{{ internal_ip_gateway }}"
       is_external: false
