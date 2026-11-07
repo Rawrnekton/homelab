@@ -15,6 +15,6 @@ lvm_volumes:
     size: 50g
   - vg: ubuntu-vg
     lv: longhorn-lv
-    size: 100g
+    size: 150g
     fstype: ext4
     mountpoint: /var/lib/longhorn
