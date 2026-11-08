@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: argus
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - git:
+        repoURL: &repo https://github.com/rawrnekton/homelab.git
+        revision: &rev HEAD
+        files:
+          - path: "argocd/argus/**/kustomization.yaml"
+  template:
+    metadata:
+      # The app names share one namespace with the argo apps, thus the prefix.
+      name: '{{ .path.path | replace "argocd/" "" | replace "/" "-" | lower }}'
+      labels:
+        cindergla.de/cluster: argus
+        cindergla.de/type: infra
+    spec:
+      project: default
+      source:
+        repoURL: *repo
+        targetRevision: *rev
+        path: "{{ .path.path }}"
+        kustomize: {}
+      destination:
+        name: argus
+        namespace: "{{ index .path.segments 2 }}"
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true
+  ignoreApplicationDifferences:
+    - jsonPointers:
+        - /spec/syncPolicy
