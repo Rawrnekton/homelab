@@ -30,3 +30,4 @@ resources:
   # Credentials for the netcup DNS API. The webhook reads them at each challenge.
   - netcup-secret-sealed.yaml
   - clusterissuer-letsencrypt-staging.yaml
+  - clusterissuer-letsencrypt-prod.yaml
