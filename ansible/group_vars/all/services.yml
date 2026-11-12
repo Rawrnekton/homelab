@@ -5,6 +5,9 @@
 
 internal_ip_gateway: 192.168.2.170
 
+# argus is not behind the gateway. Its names point directly to the node IP.
+internal_ip_argus: 192.168.2.180
+
 # dns and the certbot cleanup read this value.
 dns_domain_suffix: "cindergla.de"
 
@@ -53,4 +56,13 @@ services:
   # the wireguard play would otherwise create a second vhost for it on naglfar
   - name: cloud
     dns_target: "{{ internal_ip_gateway }}"
+    is_external: false
+  - name: grafana
+    dns_target: "{{ internal_ip_argus }}"
+    is_external: false
+  - name: loki
+    dns_target: "{{ internal_ip_argus }}"
+    is_external: false
+  - name: mimir
+    dns_target: "{{ internal_ip_argus }}"
     is_external: false
