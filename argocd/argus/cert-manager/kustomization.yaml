@@ -25,3 +25,7 @@ helmCharts:
     valuesInline:
       # The ClusterIssuer refers to this name (webhook.groupName).
       groupName: com.netcup.webhook
+
+resources:
+  # Credentials for the netcup DNS API. The webhook reads them at each challenge.
+  - netcup-secret-sealed.yaml
