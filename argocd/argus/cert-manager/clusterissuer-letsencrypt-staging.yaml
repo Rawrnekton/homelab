@@ -1,0 +1,20 @@
+---
+# Test issuer
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    # cert-manager makes the ACME account key and keeps it in this Secret
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - dns01:
+          webhook:
+            groupName: com.netcup.webhook
+            solverName: netcup
+            config:
+              secretRef: netcup-secret
+              secretNamespace: cert-manager
