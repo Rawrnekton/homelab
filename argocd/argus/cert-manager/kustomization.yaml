@@ -15,3 +15,13 @@ helmCharts:
         enabled: true
         # Helm does not delete the CRDs (and all Certificates) on uninstall.
         keep: true
+
+  # DNS-01 solver for the netcup DNS.
+  - name: cert-manager-webhook-netcup
+    namespace: cert-manager
+    releaseName: webhook-netcup
+    repo: oci://ghcr.io/aellwein/cert-manager-webhook-netcup
+    version: 1.1.3
+    valuesInline:
+      # The ClusterIssuer refers to this name (webhook.groupName).
+      groupName: com.netcup.webhook
