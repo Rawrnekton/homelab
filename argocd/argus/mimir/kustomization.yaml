@@ -1,0 +1,27 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mimir
+
+labels:
+  - includeSelectors: true
+    pairs:
+      app: mimir
+
+resources:
+  - statefulset.yaml
+  - service.yaml
+  - ingress.yaml
+  - middleware.yaml
+  - mimir-garage-credentials-sealed.yaml
+  - push-auth-htpasswd-sealed.yaml
+
+configMapGenerator:
+  - name: mimir-config
+    files:
+      - mimir.yaml
+
+images:
+  - name: mimir
+    newName: grafana/mimir
+    newTag: 3.2.1

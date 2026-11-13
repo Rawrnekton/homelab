@@ -1,0 +1,54 @@
+# Monolithic mode: one process runs all components. The mimir-distributed
+# chart starts too many pods for the 8 GB of argus.
+target: all
+multitenancy_enabled: false
+
+usage_stats:
+  enabled: false
+
+server:
+  http_listen_port: 8080
+  grpc_listen_port: 9095
+  log_level: warn
+
+common:
+  storage:
+    backend: s3
+    s3:
+      endpoint: garage.garage.svc.cluster.local:3900
+      region: garage
+      insecure: true
+      bucket_name: mimir
+      access_key_id: ${GARAGE_ACCESS_KEY_ID}
+      secret_access_key: ${GARAGE_SECRET_ACCESS_KEY}
+
+# The three stores share the bucket "mimir". The prefixes keep them apart.
+blocks_storage:
+  storage_prefix: blocks
+  tsdb:
+    dir: /data/tsdb
+  bucket_store:
+    sync_dir: /data/tsdb-sync
+ruler_storage:
+  storage_prefix: ruler
+alertmanager_storage:
+  storage_prefix: alertmanager
+
+compactor:
+  data_dir: /data/compactor
+
+# A single instance. The rings must not wait for other members.
+distributor:
+  ring:
+    instance_addr: 127.0.0.1
+ingester:
+  ring:
+    instance_addr: 127.0.0.1
+    replication_factor: 1
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+
+limits:
+  compactor_blocks_retention_period: 90d
+  max_global_series_per_user: 500000

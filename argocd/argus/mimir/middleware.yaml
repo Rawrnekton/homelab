@@ -1,0 +1,9 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: push-auth
+spec:
+  basicAuth:
+    # The key "users" contains htpasswd lines.
+    secret: push-auth-htpasswd
