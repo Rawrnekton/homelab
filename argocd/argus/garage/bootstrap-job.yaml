@@ -1,0 +1,43 @@
+---
+# Runs after each sync of argus-garage, when the StatefulSet is healthy.
+# See bootstrap.sh.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: garage-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    # Keeps the last Job (and its log) until the next sync.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bootstrap
+          image: alpine:3.22.2
+          command: [/bin/sh, /scripts/bootstrap.sh]
+          envFrom:
+            - secretRef:
+                name: garage-bootstrap-keys
+          env:
+            - name: GARAGE_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: garage-secrets
+                  key: GARAGE_ADMIN_TOKEN
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: garage-bootstrap
