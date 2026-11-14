@@ -1,0 +1,48 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: alloy
+
+helmCharts:
+  - name: k8s-monitoring
+    namespace: alloy
+    releaseName: k8s-monitoring
+    repo: https://grafana.github.io/helm-charts
+    version: 4.5.5
+    includeCRDs: true
+    valuesInline:
+      cluster:
+        name: argus
+      destinations:
+        mimir:
+          type: prometheus
+          url: http://mimir.mimir.svc.cluster.local:8080/api/v1/push
+        loki:
+          type: loki
+          url: http://loki.loki.svc.cluster.local:3100/loki/api/v1/push
+      clusterMetrics:
+        enabled: true
+        collector: alloy-metrics
+      hostMetrics:
+        enabled: true
+        collector: alloy-metrics
+        linuxHosts:
+          enabled: true
+      clusterEvents:
+        enabled: true
+        collector: alloy-singleton
+      podLogsViaLoki:
+        enabled: true
+        collector: alloy-logs
+      telemetryServices:
+        kube-state-metrics:
+          deploy: true
+        node-exporter:
+          deploy: true
+      collectors:
+        alloy-metrics:
+          presets: [clustered, statefulset]
+        alloy-singleton:
+          presets: [singleton]
+        alloy-logs:
+          presets: [filesystem-log-reader, daemonset]
