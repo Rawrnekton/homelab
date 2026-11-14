@@ -1,0 +1,69 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: grafana
+
+resources:
+  - grafana-admin-sealed.yaml
+  - grafana-authentik-oidc-credentials-sealed.yaml
+
+helmCharts:
+  - name: grafana
+    namespace: grafana
+    releaseName: grafana
+    repo: https://grafana-community.github.io/helm-charts
+    version: 14.0.1
+    valuesInline:
+      # The local admin is the break-glass login when authentik is down.
+      # See docs/argus-monitoring.md.
+      admin:
+        existingSecret: grafana-admin
+        userKey: admin-user
+        passwordKey: admin-password
+      # GF_AUTH_GENERIC_OAUTH_CLIENT_ID, GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET.
+      envFromSecret: grafana-authentik-oidc-credentials
+      persistence:
+        enabled: true
+        storageClassName: longhorn
+        size: 2Gi
+      ingress:
+        enabled: true
+        ingressClassName: traefik
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+        hosts:
+          - grafana.cindergla.de
+        tls:
+          - hosts:
+              - grafana.cindergla.de
+            secretName: grafana-tls
+      grafana.ini:
+        server:
+          root_url: https://grafana.cindergla.de
+        analytics:
+          reporting_enabled: false
+          check_for_updates: false
+        auth.generic_oauth:
+          enabled: true
+          name: authentik
+          scopes: openid profile email
+          auth_url: https://auth.cindergla.de/application/o/authorize/
+          token_url: https://auth.cindergla.de/application/o/token/
+          api_url: https://auth.cindergla.de/application/o/userinfo/
+          signout_redirect_url: https://auth.cindergla.de/application/o/grafana/end-session/
+          role_attribute_path:
+            contains(groups, 'grafana Admin') && 'Admin' || contains(groups,
+            'grafana Editor') && 'Editor' || 'Viewer'
+      datasources:
+        datasources.yaml:
+          apiVersion: 1
+          datasources:
+            - name: Mimir
+              uid: mimir
+              type: prometheus
+              url: http://mimir.mimir.svc.cluster.local:8080/prometheus
+              isDefault: true
+            - name: Loki
+              uid: loki
+              type: loki
+              url: http://loki.loki.svc.cluster.local:3100
