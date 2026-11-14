@@ -11,6 +11,14 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)\\s+tag:\\s*(?<currentValue>[^\\s]+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "Tool versions in GitHub workflows",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)\\s+version=(?<currentValue>[^\\s]+)"
+      ]
     }
   ],
   "packageRules": [
