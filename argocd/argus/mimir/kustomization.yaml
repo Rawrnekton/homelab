@@ -24,4 +24,4 @@ configMapGenerator:
 images:
   - name: mimir
     newName: grafana/mimir
-    newTag: 3.2.1
+    newTag: 3.2.5
