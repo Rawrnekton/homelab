@@ -14,7 +14,7 @@ helmCharts:
     namespace: loki
     releaseName: loki
     repo: https://grafana.github.io/helm-charts
-    version: 7.5.0
+    version: 7.6.0
     valuesInline:
       deploymentMode: SingleBinary
       loki:
