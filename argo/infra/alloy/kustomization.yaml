@@ -1,0 +1,62 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: alloy
+
+resources:
+  - alloy-push-auth-sealed.yaml
+
+helmCharts:
+  - name: k8s-monitoring
+    namespace: alloy
+    releaseName: k8s-monitoring
+    repo: https://grafana.github.io/helm-charts
+    version: 4.5.5
+    includeCRDs: true
+    valuesInline:
+      cluster:
+        name: argo
+      destinations:
+        # The Traefik basicAuth on argus checks these credentials.
+        mimir:
+          type: prometheus
+          url: https://mimir.cindergla.de/api/v1/push
+          auth:
+            type: basic
+          secret:
+            create: false
+            name: alloy-push-auth
+        loki:
+          type: loki
+          url: https://loki.cindergla.de/loki/api/v1/push
+          auth:
+            type: basic
+          secret:
+            create: false
+            name: alloy-push-auth
+      clusterMetrics:
+        enabled: true
+        collector: alloy-metrics
+      hostMetrics:
+        enabled: true
+        collector: alloy-metrics
+        linuxHosts:
+          enabled: true
+      clusterEvents:
+        enabled: true
+        collector: alloy-singleton
+      podLogsViaLoki:
+        enabled: true
+        collector: alloy-logs
+      telemetryServices:
+        kube-state-metrics:
+          deploy: true
+        node-exporter:
+          deploy: true
+      collectors:
+        alloy-metrics:
+          presets: [clustered, statefulset]
+        alloy-singleton:
+          presets: [singleton]
+        alloy-logs:
+          presets: [filesystem-log-reader, daemonset]
