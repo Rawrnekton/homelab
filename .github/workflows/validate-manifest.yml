@@ -21,7 +21,7 @@ jobs:
       - name: Install kustomize
         run: |
           # renovate: datasource=github-releases depName=kubernetes-sigs/kustomize
-          version=5.8.2
+          version=5.8.3
           curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${version}/kustomize_v${version}_linux_amd64.tar.gz" \
             | sudo tar -xz -C /usr/local/bin kustomize
           kustomize version
