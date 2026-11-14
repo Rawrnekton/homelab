@@ -23,6 +23,11 @@
   ],
   "packageRules": [
     {
+      "description": "kustomize repo also tags api/, kyaml/ and cmd/config/; only use kustomize/ releases",
+      "matchPackageNames": ["kubernetes-sigs/kustomize"],
+      "extractVersion": "^kustomize/v(?<version>.+)$"
+    },
+    {
       "description": "Require manual review for infrastructure updates",
       "matchFileNames": ["argo/infra/**"],
       "automerge": false
