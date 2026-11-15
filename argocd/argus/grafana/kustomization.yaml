@@ -7,6 +7,22 @@ resources:
   - grafana-admin-sealed.yaml
   - grafana-authentik-oidc-credentials-sealed.yaml
 
+# The dashboard sidecar loads every ConfigMap with this label.
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+
+configMapGenerator:
+  - name: dashboard-cluster-overview
+    files: [dashboards/cluster-overview.json]
+  - name: dashboard-nodes
+    files: [dashboards/nodes.json]
+  - name: dashboard-workloads
+    files: [dashboards/workloads.json]
+  - name: dashboard-logs
+    files: [dashboards/logs.json]
+
 helmCharts:
   - name: grafana
     namespace: grafana
@@ -37,6 +53,16 @@ helmCharts:
           - hosts:
               - grafana.cindergla.de
             secretName: grafana-tls
+      # Dashboards come from Git (ConfigMaps in dashboards/). Grafana
+      # cannot save UI changes to them: export the JSON and commit it.
+      sidecar:
+        dashboards:
+          enabled: true
+          label: grafana_dashboard
+          labelValue: "1"
+          resource: configmap
+          provider:
+            folder: Homelab
       grafana.ini:
         server:
           root_url: https://grafana.cindergla.de
@@ -63,6 +89,10 @@ helmCharts:
               type: prometheus
               url: http://mimir.mimir.svc.cluster.local:8080/prometheus
               isDefault: true
+              jsonData:
+                # Alloy scrapes every 60s (k8s-monitoring default). Grafana
+                # needs it for $__rate_interval; at 15s, rate() gets 1 sample.
+                timeInterval: 60s
             - name: Loki
               uid: loki
               type: loki
