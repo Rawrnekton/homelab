@@ -28,6 +28,8 @@ helmCharts:
         collector: alloy-metrics
         linuxHosts:
           enabled: true
+          metricsTuning:
+            useIntegrationAllowList: true
       clusterEvents:
         enabled: true
         collector: alloy-singleton
