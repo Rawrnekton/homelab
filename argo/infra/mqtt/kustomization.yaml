@@ -17,7 +17,7 @@ resources:
 images:
 - name: mosquitto
   newName: eclipse-mosquitto
-  newTag: 2.0.22
+  newTag: 2.0.23
 
 generatorOptions:
   disableNameSuffixHash: true
