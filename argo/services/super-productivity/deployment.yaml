@@ -1,0 +1,26 @@
+---
+# web app only (nginx with static files), all data is in the browser
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: super-productivity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: web
+  template:
+    metadata:
+      labels:
+        component: web
+    spec:
+      containers:
+        - name: super-productivity
+          image: super-productivity
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http

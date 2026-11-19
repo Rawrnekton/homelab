@@ -1,0 +1,45 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: super-productivity
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: super-productivity-authentik-forward-auth@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: focus.cindergla.de
+      http:
+        paths:
+          - backend:
+              service:
+                name: super-productivity
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - focus.cindergla.de
+---
+# no forward auth: the clients send a bearer token, supersync has its own login
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: supersync
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: sync.cindergla.de
+      http:
+        paths:
+          - backend:
+              service:
+                name: supersync
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - sync.cindergla.de

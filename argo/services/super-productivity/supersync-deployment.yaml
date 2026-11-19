@@ -1,0 +1,73 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supersync
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      component: supersync
+  template:
+    metadata:
+      labels:
+        component: supersync
+      annotations:
+        backup.velero.io/backup-volumes: supersync-data
+    spec:
+      securityContext:
+        fsGroup: 1001
+      containers:
+        - name: supersync
+          image: supersync
+          ports:
+            - name: http
+              containerPort: 1900
+          envFrom:
+            # JWT_SECRET
+            - secretRef:
+                name: supersync-secret
+            # SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM
+            - secretRef:
+                name: supersync-smtp
+          env:
+            - name: PUBLIC_URL
+              value: "https://sync.cindergla.de"
+            - name: WEBAUTHN_RP_ID
+              value: "sync.cindergla.de"
+            - name: WEBAUTHN_ORIGIN
+              value: "https://sync.cindergla.de"
+            - name: WEBAUTHN_RP_NAME
+              value: "Super Productivity Sync"
+            - name: CORS_ORIGINS
+              value: "https://focus.cindergla.de"
+            - name: ALLOWED_EMAILS
+              value: "*@cindergla.de"
+            # single replica, so the migrations can run at each start
+            - name: RUN_MIGRATIONS_ON_STARTUP
+              value: "true"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supersync-database-secret
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://supersync:$(POSTGRES_PASSWORD)@supersync-db-rw/supersync?connection_limit=60&pool_timeout=10"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+          volumeMounts:
+            - name: supersync-data
+              mountPath: /app/data
+      volumes:
+        - name: supersync-data
+          persistentVolumeClaim:
+            claimName: supersync-data

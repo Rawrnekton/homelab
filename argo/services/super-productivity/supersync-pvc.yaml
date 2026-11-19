@@ -1,0 +1,12 @@
+---
+# DATA_DIR of supersync, holds only the optional legal/terms.html
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: supersync-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,20 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: supersync-db
+spec:
+  instances: 2
+  bootstrap:
+    initdb:
+      database: supersync
+      owner: supersync
+      secret:
+        name: supersync-database-secret
+  storage:
+    size: 1Gi
+    storageClass: longhorn-r1
+  plugins:
+  - name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: garage

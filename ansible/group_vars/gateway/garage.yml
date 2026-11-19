@@ -45,3 +45,7 @@ garage_s3_buckets:
     bucket: cnpg-nextcloud
     access_key_id: "{{ vault_garage_cnpg_nextcloud_access_key_id }}"
     secret_key: "{{ vault_garage_cnpg_nextcloud_secret_key }}"
+  - name: cnpg-super-productivity
+    bucket: cnpg-super-productivity
+    access_key_id: "{{ vault_garage_cnpg_super_productivity_access_key_id }}"
+    secret_key: "{{ vault_garage_cnpg_super_productivity_secret_key }}"

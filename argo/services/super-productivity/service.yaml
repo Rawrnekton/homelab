@@ -1,0 +1,26 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: super-productivity
+spec:
+  type: ClusterIP
+  selector:
+    component: web
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supersync
+spec:
+  type: ClusterIP
+  selector:
+    component: supersync
+  ports:
+    - port: 80
+      targetPort: 1900
+      protocol: TCP

@@ -12,6 +12,7 @@ labels:
 resources:
 - database.yml
 - ingress.yml
+- outpost-ingress-focus.yml
 - cnpg-object-store.yaml
 - cnpg-scheduled-backup.yaml
 - sealed-secrets/authentik-authentik-database-secret-sealed.yaml
