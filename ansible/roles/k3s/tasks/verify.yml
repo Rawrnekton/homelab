@@ -38,6 +38,9 @@
   ansible.builtin.command: k3s kubectl get nodes --no-headers
   register: k3s_verify_nodes
   changed_when: false
+  # Read-only. Without this, check mode skips the command, stdout stays empty,
+  # and the retry loop below can never succeed.
+  check_mode: false
   delegate_to: "{{ k3s_first_control_node }}"
   run_once: true
   until: k3s_verify_nodes.stdout_lines | length >= ansible_play_hosts | length
@@ -61,6 +64,9 @@
   ansible.builtin.command: k3s kubectl get nodes --no-headers
   register: k3s_verify_ready
   changed_when: false
+  # Read-only. Without this, check mode skips the command, stdout stays empty,
+  # and the retry loop below can never succeed.
+  check_mode: false
   delegate_to: "{{ k3s_first_control_node }}"
   run_once: true
   until:

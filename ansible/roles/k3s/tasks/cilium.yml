@@ -40,6 +40,9 @@
       jsonpath={.status.numberReady},{.status.desiredNumberScheduled}
   register: k3s_cilium_rollout
   changed_when: false
+  # Read-only. Without this, check mode skips the command, stdout stays empty,
+  # and the retry loop below can never succeed.
+  check_mode: false
   failed_when: false
   until:
     - k3s_cilium_rollout.rc == 0
