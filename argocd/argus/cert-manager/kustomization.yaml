@@ -21,7 +21,7 @@ helmCharts:
     namespace: cert-manager
     releaseName: webhook-netcup
     repo: oci://ghcr.io/aellwein/cert-manager-webhook-netcup
-    version: 1.1.5
+    version: 1.1.6
     valuesInline:
       # The ClusterIssuer refers to this name (webhook.groupName).
       groupName: com.netcup.webhook
