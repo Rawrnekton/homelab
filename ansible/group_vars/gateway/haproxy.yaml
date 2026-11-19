@@ -27,6 +27,8 @@ haproxy_https_backends:
       - vorleser
       - yopass
       - cloud
+      - focus
+      - sync
 
   - name: garage
     servers:

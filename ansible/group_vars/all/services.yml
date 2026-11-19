@@ -57,6 +57,12 @@ services:
   - name: cloud
     dns_target: "{{ internal_ip_gateway }}"
     is_external: false
+  - name: focus
+    dns_target: "{{ internal_ip_gateway }}"
+    is_external: true
+  - name: sync
+    dns_target: "{{ internal_ip_gateway }}"
+    is_external: true
   - name: grafana
     dns_target: "{{ internal_ip_argus }}"
     is_external: false

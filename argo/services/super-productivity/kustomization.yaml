@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: super-productivity
+
+labels:
+- pairs:
+    environment: homelab
+- includeSelectors: true
+  pairs:
+    app: super-productivity
+
+resources:
+- middleware.yaml
+- deployment.yaml
+- supersync-database.yaml
+- supersync-pvc.yaml
+- supersync-deployment.yaml
+- service.yaml
+- ingress.yaml
+- cnpg-object-store.yaml
+- cnpg-scheduled-backup.yaml
+- sealed-secrets/super-productivity-supersync-database-secret-sealed.yaml
+- sealed-secrets/super-productivity-supersync-secret-sealed.yaml
+- sealed-secrets/super-productivity-supersync-smtp-sealed.yaml
+- cnpg-garage-credentials-sealed.yaml
+
+images:
+- name: super-productivity
+  newName: johannesjo/super-productivity
+  newTag: v20.0.0
+- name: supersync
+  newName: ghcr.io/super-productivity/supersync
+  newTag: v20.0.0

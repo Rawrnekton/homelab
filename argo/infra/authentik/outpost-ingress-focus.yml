@@ -1,0 +1,24 @@
+---
+# Routes the embedded outpost path on focus.cindergla.de to authentik, for the
+# forward auth of super-productivity. It is here because Traefik does not allow
+# ExternalName services or cross-namespace references.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: authentik-outpost-focus
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: focus.cindergla.de
+      http:
+        paths:
+          - backend:
+              service:
+                name: authentik-server
+                port:
+                  number: 80
+            path: /outpost.goauthentik.io
+            pathType: Prefix
+  tls:
+    - hosts:
+        - focus.cindergla.de
