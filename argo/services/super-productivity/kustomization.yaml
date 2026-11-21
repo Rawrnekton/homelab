@@ -30,4 +30,4 @@ images:
   newTag: v20.0.0
 - name: supersync
   newName: ghcr.io/super-productivity/supersync
-  newTag: v20.0.0
+  newTag: v20.1.0
