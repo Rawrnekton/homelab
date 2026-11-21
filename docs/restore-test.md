@@ -238,7 +238,7 @@ Do all next steps in this shell.
    velero restore create restore-test-sealed-keys \
      --from-backup sealed-secrets-keys-<newest> --wait
    kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-key=active
-   kustomize build --enable-helm argo/infra/kube-system/sealed-secrets \
+   kustomize build --enable-helm argocd/olympus/infra/kube-system/sealed-secrets \
      | kubectl apply --server-side -f -
    ```
 
@@ -254,7 +254,7 @@ Do all next steps in this shell.
 4. CNPG operator and barman-cloud plugin, from git:
 
    ```bash
-   kustomize build --enable-helm argo/infra/cnpg-system \
+   kustomize build --enable-helm argocd/olympus/infra/cnpg-system \
      | kubectl apply --server-side -f -
    kubectl -n cnpg-system rollout status deploy/cnpg-cloudnative-pg deploy/barman-cloud
    ```

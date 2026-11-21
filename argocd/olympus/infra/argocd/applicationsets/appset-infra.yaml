@@ -1,10 +1,8 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: services
+  name: infra
 spec:
-  goTemplate: true
-  goTemplateOptions: ["missingkey=error"]
   syncPolicy:
     preserveResourcesOnDeletion: true
   generators:
@@ -12,31 +10,27 @@ spec:
         repoURL: &repo https://github.com/rawrnekton/homelab.git
         revision: &rev HEAD
         files:
-          - path: "argo/services/**/kustomization.yaml"
+          - path: "argocd/olympus/infra/**/kustomization.yaml"
   template:
     metadata:
-      name: '{{ .path.path | replace "argo/services/" "" | replace "/" "-" | lower }}'
+      name: '{{ path.basename }}'
       labels:
-        cindergla.de/service: '{{ index .path.segments 2 }}'
-        cindergla.de/type: service
+        cindergla.de/type: infra
     spec:
       project: default
       source:
         repoURL: *repo
         targetRevision: *rev
-        path: '{{ .path.path }}'
+        path: '{{ path }}'
         kustomize: {}
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{ index .path.segments 2 }}'
+        namespace: '{{ path[3] }}'
       syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
         syncOptions:
           - CreateNamespace=true
           - ApplyOutOfSyncOnly=true
-          - FailOnSharedResource=true
+          - ServerSideApply=true
   ignoreApplicationDifferences:
     - jsonPointers:
       - /spec/syncPolicy

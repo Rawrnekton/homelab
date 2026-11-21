@@ -1,7 +1,7 @@
 ---
 # forward auth to the embedded authentik outpost (proxy provider, single application).
 # The outpost path /outpost.goauthentik.io on focus.cindergla.de goes to authentik,
-# see argo/infra/authentik/outpost-ingress-focus.yml
+# see argocd/olympus/infra/authentik/outpost-ingress-focus.yml
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:

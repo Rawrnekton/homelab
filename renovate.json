@@ -29,12 +29,12 @@
     },
     {
       "description": "Require manual review for infrastructure updates",
-      "matchFileNames": ["argo/infra/**"],
+      "matchFileNames": ["argocd/olympus/infra/**"],
       "automerge": false
     },
     {
       "description": "Auto-merge service updates after checks pass",
-      "matchFileNames": ["argo/services/**"],
+      "matchFileNames": ["argocd/olympus/services/**"],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true

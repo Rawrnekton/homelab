@@ -1,9 +1,9 @@
 ---
 # Helm values for Velero on restore-test. Same chart and plugin as
-# argo/infra/velero, with two differences:
+# argocd/olympus/infra/velero, with two differences:
 # - accessMode ReadOnly: Velero does not write backups or delete them.
 # - velero-credentials-ro: a Garage key that can only read the bucket.
-# No schedules: the Schedule objects are in argo/infra/velero, not in the chart.
+# No schedules: the Schedule objects are in argocd/olympus/infra/velero, not in the chart.
 initContainers:
   - name: velero-plugin-for-aws
     image: velero/velero-plugin-for-aws:v1.14.0
