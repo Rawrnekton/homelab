@@ -27,4 +27,4 @@ configMapGenerator:
 images:
   - name: garage
     newName: dxflrs/garage
-    newTag: v2.5.0
+    newTag: v2.6.0
