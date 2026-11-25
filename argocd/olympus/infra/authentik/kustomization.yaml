@@ -73,4 +73,4 @@ helmCharts:
           secretKeyRef:
             key: secret-key
             name: authentik-secret-key
-  version: 2026.8.6
+  version: 2026.8.7
