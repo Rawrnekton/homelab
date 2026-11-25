@@ -11,7 +11,7 @@ helmCharts:
     namespace: alloy
     releaseName: k8s-monitoring
     repo: https://grafana.github.io/helm-charts
-    version: 4.6.1
+    version: 4.6.2
     includeCRDs: true
     valuesInline:
       cluster:
