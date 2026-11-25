@@ -28,7 +28,7 @@ helmCharts:
     namespace: grafana
     releaseName: grafana
     repo: https://grafana-community.github.io/helm-charts
-    version: 14.5.0
+    version: 14.6.0
     valuesInline:
       # The local admin is the break-glass login when authentik is down.
       # See docs/argus-monitoring.md.
