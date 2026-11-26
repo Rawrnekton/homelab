@@ -24,7 +24,7 @@ resources:
 images:
 - name: valkey
   newName: valkey/valkey
-  newTag: 9.2.0-alpine
+  newTag: 9.2.1-alpine
 - name: busybox
   newTag: "1.38"
 
