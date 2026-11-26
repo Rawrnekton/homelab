@@ -33,7 +33,7 @@ helmCharts:
   namespace: nextcloud
   releaseName: nextcloud
   repo: https://nextcloud.github.io/helm/
-  version: 9.4.5
+  version: 9.4.6
   valuesInline:
     podAnnotations:
       # config.php (instance secrets) and custom_apps, the data dir is on iSCSI
